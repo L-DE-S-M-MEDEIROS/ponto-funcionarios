@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Ponto Funcionario</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <div class="app-layout">
+      <aside class="sidebar">
+        <div class="brand">
+          <span class="brand-mark">PF</span>
+          <div>
+            <strong>Ponto Funcionario</strong>
+            <small>Banco de horas</small>
+          </div>
+        </div>
+        <nav class="nav-tabs" aria-label="Modulos">
+          <button class="nav-button active" type="button" data-view="dashboard">Painel</button>
+          <button class="nav-button" type="button" data-view="import">Importacao</button>
+          <button class="nav-button" type="button" data-view="employees">Funcionarios</button>
+          <button class="nav-button" type="button" data-view="timesheet">Banco de horas</button>
+          <button class="nav-button" type="button" data-view="reports">Relatorios</button>
+        </nav>
+        <div class="storage-box">
+          <span id="saveStatus">Nada salvo ainda.</span>
+        </div>
+      </aside>
+
+      <main class="main-content">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">Controle de ponto</p>
+            <h1 id="viewTitle">Painel</h1>
+          </div>
+          <div class="topbar-actions">
+            <button id="backupJson" class="ghost-button" type="button">Backup</button>
+            <button id="restoreJson" class="ghost-button" type="button">Restaurar</button>
+            <button id="clearLocalData" class="ghost-button danger-button" type="button">Limpar</button>
+            <button id="exportCsv" class="primary-button" type="button">CSV</button>
+            <input id="restoreFile" class="hidden-file" type="file" accept=".json">
+          </div>
+        </header>
+
+        <section class="filter-bar" aria-label="Filtros">
+          <label>
+            Mes
+            <select id="monthFilter">
+              <option value="">Todos</option>
+            </select>
+          </label>
+          <label>
+            Funcionario
+            <select id="employeeFilter">
+              <option value="">Todos</option>
+            </select>
+          </label>
+          <label>
+            Jornada padrao semana
+            <input id="weekdayHours" type="time" value="08:00">
+          </label>
+          <label>
+            Jornada padrao sabado
+            <input id="saturdayHours" type="time" value="04:00">
+          </label>
+          <label>
+            Tolerancia min.
+            <input id="defaultTolerance" type="number" min="0" step="1" value="15">
+          </label>
+        </section>
+
+        <section id="dashboardView" class="view active">
+          <div class="summary-grid">
+            <article>
+              <span>Dias calculados</span>
+              <strong id="daysCount">0</strong>
+            </article>
+            <article>
+              <span>Horas trabalhadas</span>
+              <strong id="workedTotal">00:00</strong>
+            </article>
+            <article>
+              <span>Horas previstas</span>
+              <strong id="expectedTotal">00:00</strong>
+            </article>
+            <article>
+              <span>Saldo banco</span>
+              <strong id="balanceTotal">00:00</strong>
+            </article>
+          </div>
+
+          <div class="two-column">
+            <section class="panel">
+              <div class="panel-title">
+                <h2>Saldo por funcionario</h2>
+                <span id="dashboardStatus">Sem registros.</span>
+              </div>
+              <div id="employeeBalances" class="list-panel"></div>
+            </section>
+
+            <section class="panel">
+              <div class="panel-title">
+                <h2>Alertas</h2>
+                <span>Dias que precisam conferencia</span>
+              </div>
+              <div id="alertList" class="list-panel"></div>
+            </section>
+          </div>
+        </section>
+
+        <section id="importView" class="view">
+          <section class="panel">
+            <div class="panel-title">
+              <h2>Importacao do relogio</h2>
+              <div class="panel-actions">
+                <input id="fileInput" type="file" accept=".txt,.csv">
+                <button id="parseText" class="primary-button" type="button">Processar</button>
+              </div>
+            </div>
+            <textarea id="rawText" spellcheck="false" placeholder="Cole aqui o TXT exportado pelo relogio. O sistema aceita o formato com ID, Nome, Depart., Tempo e tambem layout W20 com EnNo e DateTime."></textarea>
+          </section>
+        </section>
+
+        <section id="employeesView" class="view">
+          <section class="panel">
+            <div class="panel-title">
+              <h2>Cadastro de funcionarios</h2>
+              <button id="addEmployee" class="primary-button" type="button">Novo funcionario</button>
+            </div>
+            <div class="table-wrap compact-wrap">
+              <table class="dense-table">
+                <thead>
+                  <tr>
+                    <th>ID relogio</th>
+                    <th>Nome</th>
+                    <th>Departamento</th>
+                    <th>Semana</th>
+                    <th>Sabado</th>
+                    <th>Domingo</th>
+                    <th>Tolerancia</th>
+                    <th>Ativo</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="employeeRows"></tbody>
+              </table>
+            </div>
+          </section>
+        </section>
+
+        <section id="timesheetView" class="view">
+          <section class="panel">
+            <div class="panel-title">
+              <h2>Apuracao diaria</h2>
+              <span id="statusText">Nenhum arquivo importado.</span>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Data</th>
+                    <th>Funcionario</th>
+                    <th>Departamento</th>
+                    <th>Batidas</th>
+                    <th>Trabalhado</th>
+                    <th>Previsto</th>
+                    <th>Credito</th>
+                    <th>Debito</th>
+                    <th>Observacao</th>
+                    <th>Alertas</th>
+                  </tr>
+                </thead>
+                <tbody id="resultRows"></tbody>
+              </table>
+            </div>
+          </section>
+        </section>
+
+        <section id="reportsView" class="view">
+          <section class="panel">
+            <div class="panel-title">
+              <h2>Relatorio mensal</h2>
+              <button id="printReport" class="primary-button" type="button">Imprimir</button>
+            </div>
+            <div id="reportOutput" class="report-output"></div>
+          </section>
+        </section>
+      </main>
+    </div>
+
+    <script src="app.js"></script>
+  </body>
+</html>

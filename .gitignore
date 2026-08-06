@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+*.error.txt
+build/
+dist/
+release/
+*.tmp
+
+# Dados locais de funcionarios e ponto nao devem ir para GitHub publico.
+data/*.db
+data/*.db-*
+data/dados_*.json

@@ -1,0 +1,630 @@
+import sqlite3
+import tkinter as tk
+from datetime import date
+from pathlib import Path
+from tkinter import messagebox, ttk
+
+
+APP_DIR = Path(__file__).resolve().parent
+DB_PATH = APP_DIR / "data" / "ponto_funcionarios.db"
+APP_VERSION = "26.8"
+
+
+MONTHS = [
+    ("1", "Janeiro"),
+    ("2", "Fevereiro"),
+    ("3", "Março"),
+    ("4", "Abril"),
+    ("5", "Maio"),
+    ("6", "Junho"),
+    ("7", "Julho"),
+    ("8", "Agosto"),
+    ("9", "Setembro"),
+    ("10", "Outubro"),
+    ("11", "Novembro"),
+    ("12", "Dezembro"),
+]
+
+
+class PontoDesktop(tk.Tk):
+    def __init__(self):
+        super().__init__()
+        self.title("SISTEMA_CONTROLE_DE_PONTO - BOLSAS BABY")
+        self.geometry("1160x720")
+        self.minsize(1060, 650)
+        self.configure(bg="#eeeeee")
+        self.selected_entry_id = None
+
+        self.conn = sqlite3.connect(DB_PATH)
+        self.conn.row_factory = sqlite3.Row
+        self.ensure_schema()
+        self.create_menu()
+        self.show_login()
+
+    def ensure_schema(self):
+        self.conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS employees (
+              id INTEGER PRIMARY KEY,
+              clock_id TEXT,
+              name TEXT,
+              department TEXT,
+              active TEXT,
+              cpf TEXT,
+              pis TEXT,
+              role TEXT,
+              weekday_hours TEXT,
+              saturday_hours TEXT,
+              sunday_hours TEXT,
+              tolerance_minutes INTEGER
+            )
+            """
+        )
+        self.conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS time_entries (
+              id INTEGER PRIMARY KEY,
+              employee_id INTEGER,
+              work_date TEXT,
+              day INTEGER,
+              month INTEGER,
+              year INTEGER,
+              entrada1 TEXT,
+              saida1 TEXT,
+              entrada2 TEXT,
+              saida2 TEXT,
+              entrada3 TEXT,
+              saida3 TEXT,
+              entrada4 TEXT,
+              saida4 TEXT,
+              expected_hours TEXT,
+              worked_hours TEXT,
+              credit_hours TEXT,
+              debit_hours TEXT,
+              credit_decimal REAL,
+              debit_decimal REAL,
+              extra_night_decimal REAL,
+              absence TEXT,
+              note TEXT,
+              legacy_id TEXT
+            )
+            """
+        )
+        self.conn.commit()
+
+    def create_menu(self):
+        menu = tk.Menu(self, tearoff=False)
+
+        cadastros = tk.Menu(menu, tearoff=False)
+        cadastros.add_command(label="Funcionário-Leitor Nitgen", command=self.show_employees)
+        cadastros.add_command(label="Funcionário-Outros Leitores", command=self.show_employees)
+        cadastros.add_command(label="Departamento", command=self.show_departments)
+        menu.add_cascade(label="CADASTROS", menu=cadastros)
+
+        processos = tk.Menu(menu, tearoff=False)
+        processos.add_command(label="Consulta Ponto - Edição", command=self.show_manual_point)
+        processos.add_command(label="Ponto Biométrico Nitgen", command=self.not_ready)
+        processos.add_command(label="Ponto por Barras ou Senha", command=self.not_ready)
+        processos.add_command(label="Impressão do Ponto", command=self.show_report)
+        processos.add_command(label="Importar Ponto", command=self.not_ready)
+        processos.add_separator()
+        processos.add_command(label="Retirada de Cesta", command=self.not_ready)
+        processos.add_command(label="Relatório Retirada de Cesta", command=self.not_ready)
+        processos.add_command(label="Relatório Cesta não Retirada", command=self.not_ready)
+        processos.add_separator()
+        processos.add_command(label="Lançar Cesta", command=self.not_ready)
+        processos.add_command(label="Limpar Cesta", command=self.not_ready)
+        processos.add_separator()
+        processos.add_command(label="Pagamentos/Holerite", command=self.not_ready)
+        menu.add_cascade(label="PROCESSOS", menu=processos)
+
+        auxiliares = tk.Menu(menu, tearoff=False)
+        auxiliares.add_command(label="Usuários", command=self.not_ready)
+        auxiliares.add_command(label="Parâmetros", command=self.show_parameters)
+        auxiliares.add_command(label="Manutenção", command=self.not_ready)
+        auxiliares.add_command(label="Eventos do Sistema", command=self.not_ready)
+        auxiliares.add_command(label="Cópia Segurança", command=self.backup_info)
+        auxiliares.add_separator()
+        auxiliares.add_command(label="Ponto Automatico Criar Atalho em Desktop", command=self.not_ready)
+        auxiliares.add_separator()
+        auxiliares.add_command(label="Limpar Banco de Dados", command=self.not_ready)
+        auxiliares.add_separator()
+        auxiliares.add_command(label="Sobre", command=self.about)
+        menu.add_cascade(label="AUXILIARES", menu=auxiliares)
+
+        menu.add_command(label="SAIR", command=self.destroy)
+        self.config(menu=menu)
+
+    def clear(self):
+        for child in self.winfo_children():
+            if not isinstance(child, tk.Menu):
+                child.destroy()
+
+    def show_login(self):
+        self.clear()
+        frame = tk.Frame(self, bg="white", highlightbackground="#888888", highlightthickness=1)
+        frame.place(relx=0.5, rely=0.5, anchor="center", width=645, height=350)
+
+        header = tk.Frame(frame, bg="#0a6d83", height=58)
+        header.pack(fill="x")
+        tk.Label(header, text="SISTEMA", bg="#0a6d83", fg="#ff7a00", font=("Arial Black", 26)).pack(side="right", padx=45)
+
+        tk.Label(frame, text="🔑", bg="white", fg="#d49b00", font=("Arial", 34)).place(x=300, y=90)
+        tk.Label(frame, text=f"Versão: {APP_VERSION}", bg="white", fg="black", font=("Arial", 10, "bold")).place(x=355, y=88)
+
+        self.login_user = tk.StringVar()
+        self.login_password = tk.StringVar()
+        tk.Entry(frame, textvariable=self.login_user, bg="#ffffb8", width=18).place(x=515, y=88, height=32)
+        user_combo = ttk.Combobox(frame, values=["ADMIN"], width=18)
+        user_combo.place(x=410, y=135, height=24)
+        user_combo.set("ADMIN")
+        tk.Entry(frame, textvariable=self.login_password, bg="#ffffb8", show="*", width=22).place(x=410, y=162, height=26)
+        tk.Entry(frame, bg="#ffffb8", width=22).place(x=410, y=194, height=26)
+
+        footer = tk.Frame(frame, bg="#2b2b2b", height=38)
+        footer.pack(side="bottom", fill="x")
+        tk.Frame(frame, bg="#00a9d6", height=8).pack(side="bottom", fill="x")
+        tk.Label(footer, text="Suporte pelo Whatsapp (11)99607-5649", bg="#2b2b2b", fg="white", font=("Arial", 9, "bold")).pack(side="right", padx=40)
+
+        tk.Button(frame, text="Entrar", command=self.show_manual_point, width=12).place(x=515, y=235)
+
+    def show_manual_point(self):
+        self.clear()
+        self.selected_entry_id = None
+
+        root = tk.Frame(self, bg="#eeeeee")
+        root.pack(fill="both", expand=True, padx=8, pady=8)
+
+        title = tk.Label(root, text="Ponto Inclusão Manual", bg="#eeeeee", fg="#777777", font=("Arial", 26, "bold"))
+        title.grid(row=0, column=0, columnspan=4, sticky="w")
+
+        top_buttons = tk.Frame(root, bg="#eeeeee")
+        top_buttons.grid(row=0, column=4, columnspan=5, sticky="ew", padx=4)
+        tk.Button(top_buttons, text="Alinha os dias sem intervalo", command=self.not_ready).pack(side="left", padx=4)
+        tk.Button(top_buttons, text="Insere horário de almoço", command=self.insert_lunch).pack(side="left", padx=4)
+        tk.Button(top_buttons, text="Clique aqui para Zerar o saldo do Funcionário", command=self.zero_balance).pack(side="left", padx=4)
+
+        form = tk.LabelFrame(root, text="Funcionário", bg="#eeeeee", fg="black", font=("Arial", 10, "bold"))
+        form.grid(row=1, column=0, columnspan=7, sticky="ew", pady=4)
+        form.columnconfigure(0, weight=1)
+
+        self.employee_var = tk.StringVar()
+        self.employee_combo = ttk.Combobox(form, textvariable=self.employee_var, values=self.employee_options(), state="readonly")
+        self.employee_combo.grid(row=0, column=0, sticky="ew", padx=6, pady=6)
+        self.employee_combo.bind("<<ComboboxSelected>>", lambda _event: self.load_entries())
+
+        tk.Label(form, text="Ativo\nN", bg="#eeeeee", font=("Arial", 9, "bold")).grid(row=0, column=1, padx=4)
+
+        self.store_var = tk.StringVar(value="TODOS")
+        self.month_var = tk.StringVar(value=str(date.today().month))
+        self.year_var = tk.StringVar(value=str(date.today().year))
+        self.hours_month_var = tk.StringVar(value="0:00")
+
+        self.combo_block(form, "Loja", self.store_var, ["TODOS"], 2)
+        self.combo_block(form, "Mês", self.month_var, [label for _num, label in MONTHS], 3)
+        self.entry_block(form, "Ano", self.year_var, 4, width=7, yellow=True)
+        self.entry_block(form, "Horas Mês", self.hours_month_var, 5, width=10)
+
+        self.field_vars = {
+            "day": tk.StringVar(),
+            "week": tk.StringVar(),
+            "absence": tk.BooleanVar(),
+            "holiday": tk.BooleanVar(),
+            "expected": tk.StringVar(value="0:00"),
+            "worked": tk.StringVar(),
+            "credit": tk.StringVar(),
+            "debit": tk.StringVar(),
+            "night": tk.StringVar(),
+            "entrada1": tk.StringVar(),
+            "saida1": tk.StringVar(),
+            "entrada2": tk.StringVar(),
+            "saida2": tk.StringVar(),
+            "entrada3": tk.StringVar(),
+            "saida3": tk.StringVar(),
+            "entrada4": tk.StringVar(),
+            "saida4": tk.StringVar(),
+            "note": tk.StringVar(),
+        }
+
+        edit = tk.LabelFrame(root, bg="#eeeeee")
+        edit.grid(row=2, column=0, columnspan=7, sticky="ew")
+        for col in range(12):
+            edit.columnconfigure(col, weight=1)
+
+        self.small_field(edit, "Dia", "day", 0, 0, 7)
+        self.small_field(edit, "Semana", "week", 0, 1, 8)
+        tk.Checkbutton(edit, text="Falta", variable=self.field_vars["absence"], bg="#eeeeee").grid(row=0, column=2, sticky="w")
+        tk.Checkbutton(edit, text="Feriado", variable=self.field_vars["holiday"], bg="#eeeeee").grid(row=0, column=3, sticky="w")
+        self.small_field(edit, "Horas Dia", "expected", 0, 5, 9, bg="#fff8b8")
+        self.small_field(edit, "Horas Trabalhada", "worked", 0, 6, 14)
+        self.small_field(edit, "Crédito", "credit", 0, 7, 8, bg="#b7ffb7")
+        self.small_field(edit, "Débito", "debit", 0, 8, 8, bg="#ff3a3a")
+        self.small_field(edit, "Adicional", "night", 0, 9, 8, bg="#bffafa")
+
+        punches = [("Entrada", "entrada1"), ("Saída", "saida1"), ("Entrada", "entrada2"), ("Saída", "saida2"), ("Entrada", "entrada3"), ("Saída", "saida3"), ("Entrada", "entrada4"), ("Saída", "saida4")]
+        for idx, (label, key) in enumerate(punches):
+            self.small_field(edit, label, key, 2, idx, 10)
+
+        tk.Label(edit, text="Obs", bg="#eeeeee", font=("Arial", 9, "bold")).grid(row=4, column=0, sticky="w")
+        tk.Entry(edit, textvariable=self.field_vars["note"]).grid(row=5, column=0, columnspan=10, sticky="ew", padx=4, pady=2)
+
+        side = tk.Frame(root, bg="#eeeeee")
+        side.grid(row=1, column=7, rowspan=3, sticky="ns", padx=8)
+        tk.Button(side, text="Conferência Individual", width=22, command=self.load_entries).pack(pady=4)
+        tk.Button(side, text="Conferência Todos", width=22, command=self.load_entries).pack(pady=4)
+        tk.Button(side, text="Conferência por Período", width=22, command=self.load_entries).pack(pady=(48, 4))
+        tk.Button(side, text="Funcionários Presentes", width=22, command=self.not_ready).pack(pady=4)
+        tk.Button(side, text="Funcionários Faltantes", width=22, command=self.not_ready).pack(pady=4)
+
+        columns = ("day", "entrada1", "saida1", "entrada2", "saida2", "entrada3", "saida3", "entrada4", "saida4", "expected", "worked", "note", "credit", "debit", "night", "store")
+        self.tree = ttk.Treeview(root, columns=columns, show="headings", height=12)
+        headings = ["Dia", "Entra.1", "Saida1", "Entra.2", "Saida2", "Entra.3", "Saida3", "Entra.4", "Saida4", "Horas dia", "Hora Trabalhada", "Obs", "Credito", "Debito", "Adicional", "Loja"]
+        widths = [44, 65, 65, 65, 65, 65, 65, 65, 65, 75, 105, 160, 70, 70, 75, 80]
+        for col, heading, width in zip(columns, headings, widths):
+            self.tree.heading(col, text=heading)
+            self.tree.column(col, width=width, minwidth=width, stretch=False)
+        self.tree.grid(row=4, column=0, columnspan=8, sticky="nsew", pady=6)
+        self.tree.bind("<<TreeviewSelect>>", self.select_entry)
+        root.rowconfigure(4, weight=1)
+        root.columnconfigure(6, weight=1)
+
+        bottom = tk.Frame(root, bg="#eeeeee")
+        bottom.grid(row=5, column=0, columnspan=8, sticky="ew", pady=4)
+        tk.Button(bottom, text="💾\nGravar(F1)", width=12, height=3, command=self.save_entry).pack(side="left")
+        tk.Button(bottom, text="➕\nIncluir(F2)", width=12, height=3, command=self.clear_form).pack(side="left")
+        tk.Button(bottom, text="❌\nCancelar(F3)", width=12, height=3, command=self.clear_form).pack(side="left")
+        tk.Button(bottom, text="🗑\nExcluir", width=12, height=3, command=self.delete_entry).pack(side="left")
+        tk.Button(bottom, text="❌\nSair(F5)", width=12, height=3, command=self.show_login).pack(side="right")
+
+        self.bind("<F1>", lambda _event: self.save_entry())
+        self.bind("<F2>", lambda _event: self.clear_form())
+        self.bind("<F3>", lambda _event: self.clear_form())
+        self.bind("<F5>", lambda _event: self.show_login())
+
+        employees = self.employee_options()
+        if employees:
+            self.employee_combo.set(employees[0])
+        self.load_entries()
+
+    def combo_block(self, parent, label, variable, values, col):
+        tk.Label(parent, text=label, bg="#eeeeee", font=("Arial", 10, "bold")).grid(row=0, column=col, sticky="sw")
+        combo = ttk.Combobox(parent, textvariable=variable, values=values, state="readonly", width=12)
+        combo.grid(row=1, column=col, sticky="ew", padx=4, pady=3)
+        combo.bind("<<ComboboxSelected>>", lambda _event: self.load_entries())
+
+    def entry_block(self, parent, label, variable, col, width=10, yellow=False):
+        tk.Label(parent, text=label, bg="#eeeeee", font=("Arial", 10, "bold")).grid(row=0, column=col, sticky="sw")
+        tk.Entry(parent, textvariable=variable, width=width, bg="#fff8b8" if yellow else "white").grid(row=1, column=col, sticky="ew", padx=4, pady=3)
+
+    def small_field(self, parent, label, key, row, col, width, bg="white"):
+        tk.Label(parent, text=label, bg="#eeeeee", font=("Arial", 9, "bold")).grid(row=row, column=col, sticky="w", padx=2)
+        tk.Entry(parent, textvariable=self.field_vars[key], width=width, bg=bg).grid(row=row + 1, column=col, sticky="ew", padx=2, pady=2)
+
+    def employee_options(self):
+        rows = self.conn.execute("SELECT id, name FROM employees ORDER BY name").fetchall()
+        return [f"{row['id']} - {row['name']}" for row in rows]
+
+    def selected_employee_id(self):
+        if not hasattr(self, "employee_var"):
+            return None
+        value = self.employee_var.get()
+        if not value:
+            return None
+        return int(value.split(" - ", 1)[0])
+
+    def selected_month(self):
+        value = self.month_var.get()
+        for number, label in MONTHS:
+            if value == label or value == number:
+                return int(number)
+        return date.today().month
+
+    def load_entries(self):
+        if not hasattr(self, "tree"):
+            return
+        for item in self.tree.get_children():
+            self.tree.delete(item)
+
+        employee_id = self.selected_employee_id()
+        if not employee_id:
+            return
+
+        rows = self.conn.execute(
+            """
+            SELECT *
+            FROM time_entries
+            WHERE employee_id = ? AND month = ? AND year = ?
+            ORDER BY day, id
+            """,
+            (employee_id, self.selected_month(), int(self.year_var.get() or date.today().year)),
+        ).fetchall()
+
+        credit_total = 0
+        debit_total = 0
+        worked_total = 0
+        for row in rows:
+            credit_total += minutes(row["credit_hours"])
+            debit_total += minutes(row["debit_hours"])
+            worked_total += minutes(row["worked_hours"])
+            self.tree.insert(
+                "",
+                "end",
+                iid=str(row["id"]),
+                values=(
+                    row["day"],
+                    hhmm(row["entrada1"]),
+                    hhmm(row["saida1"]),
+                    hhmm(row["entrada2"]),
+                    hhmm(row["saida2"]),
+                    hhmm(row["entrada3"]),
+                    hhmm(row["saida3"]),
+                    hhmm(row["entrada4"]),
+                    hhmm(row["saida4"]),
+                    hhmm(row["expected_hours"]),
+                    hhmm(row["worked_hours"]),
+                    row["note"] or "",
+                    hhmm(row["credit_hours"]),
+                    hhmm(row["debit_hours"]),
+                    decimal_to_hhmm(row["extra_night_decimal"]),
+                    "TODOS",
+                ),
+            )
+        self.hours_month_var.set(format_minutes(worked_total))
+
+    def select_entry(self, _event=None):
+        selected = self.tree.selection()
+        if not selected:
+            return
+        self.selected_entry_id = int(selected[0])
+        row = self.conn.execute("SELECT * FROM time_entries WHERE id = ?", (self.selected_entry_id,)).fetchone()
+        if not row:
+            return
+        mapping = {
+            "day": row["day"],
+            "expected": hhmm(row["expected_hours"]),
+            "worked": hhmm(row["worked_hours"]),
+            "credit": hhmm(row["credit_hours"]),
+            "debit": hhmm(row["debit_hours"]),
+            "night": decimal_to_hhmm(row["extra_night_decimal"]),
+            "entrada1": hhmm(row["entrada1"]),
+            "saida1": hhmm(row["saida1"]),
+            "entrada2": hhmm(row["entrada2"]),
+            "saida2": hhmm(row["saida2"]),
+            "entrada3": hhmm(row["entrada3"]),
+            "saida3": hhmm(row["saida3"]),
+            "entrada4": hhmm(row["entrada4"]),
+            "saida4": hhmm(row["saida4"]),
+            "note": row["note"] or "",
+        }
+        for key, value in mapping.items():
+            self.field_vars[key].set("" if value is None else value)
+        self.field_vars["absence"].set((row["absence"] or "").upper() == "S")
+
+    def clear_form(self):
+        self.selected_entry_id = None
+        for key, variable in self.field_vars.items():
+            if isinstance(variable, tk.BooleanVar):
+                variable.set(False)
+            else:
+                variable.set("")
+        self.field_vars["expected"].set("0:00")
+
+    def save_entry(self):
+        employee_id = self.selected_employee_id()
+        if not employee_id:
+            messagebox.showwarning("Atenção", "Selecione um funcionário.")
+            return
+        try:
+            day = int(self.field_vars["day"].get())
+            month = self.selected_month()
+            year = int(self.year_var.get())
+            work_date = f"{year:04d}-{month:02d}-{day:02d}"
+        except ValueError:
+            messagebox.showwarning("Atenção", "Informe dia, mês e ano válidos.")
+            return
+
+        punches = [
+            self.field_vars["entrada1"].get(),
+            self.field_vars["saida1"].get(),
+            self.field_vars["entrada2"].get(),
+            self.field_vars["saida2"].get(),
+            self.field_vars["entrada3"].get(),
+            self.field_vars["saida3"].get(),
+            self.field_vars["entrada4"].get(),
+            self.field_vars["saida4"].get(),
+        ]
+        worked = calculate_worked(punches)
+        expected = normalize_time(self.field_vars["expected"].get()) or "00:00"
+        balance = worked - minutes(expected)
+        credit = max(0, balance)
+        debit = max(0, -balance)
+
+        values = (
+            employee_id,
+            work_date,
+            day,
+            month,
+            year,
+            normalize_time(self.field_vars["entrada1"].get()),
+            normalize_time(self.field_vars["saida1"].get()),
+            normalize_time(self.field_vars["entrada2"].get()),
+            normalize_time(self.field_vars["saida2"].get()),
+            normalize_time(self.field_vars["entrada3"].get()),
+            normalize_time(self.field_vars["saida3"].get()),
+            normalize_time(self.field_vars["entrada4"].get()),
+            normalize_time(self.field_vars["saida4"].get()),
+            expected,
+            format_minutes(worked),
+            format_minutes(credit),
+            format_minutes(debit),
+            round(credit / 60, 2),
+            round(debit / 60, 2),
+            "S" if self.field_vars["absence"].get() else None,
+            self.field_vars["note"].get(),
+        )
+
+        if self.selected_entry_id:
+            self.conn.execute(
+                """
+                UPDATE time_entries
+                SET employee_id=?, work_date=?, day=?, month=?, year=?,
+                    entrada1=?, saida1=?, entrada2=?, saida2=?, entrada3=?, saida3=?, entrada4=?, saida4=?,
+                    expected_hours=?, worked_hours=?, credit_hours=?, debit_hours=?,
+                    credit_decimal=?, debit_decimal=?, absence=?, note=?
+                WHERE id=?
+                """,
+                values + (self.selected_entry_id,),
+            )
+        else:
+            self.conn.execute(
+                """
+                INSERT INTO time_entries (
+                    employee_id, work_date, day, month, year,
+                    entrada1, saida1, entrada2, saida2, entrada3, saida3, entrada4, saida4,
+                    expected_hours, worked_hours, credit_hours, debit_hours,
+                    credit_decimal, debit_decimal, absence, note
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                values,
+            )
+        self.conn.commit()
+        self.clear_form()
+        self.load_entries()
+
+    def delete_entry(self):
+        if not self.selected_entry_id:
+            return
+        if not messagebox.askyesno("Excluir", "Excluir este ponto?"):
+            return
+        self.conn.execute("DELETE FROM time_entries WHERE id = ?", (self.selected_entry_id,))
+        self.conn.commit()
+        self.clear_form()
+        self.load_entries()
+
+    def insert_lunch(self):
+        self.field_vars["saida1"].set("12:00")
+        self.field_vars["entrada2"].set("12:30")
+
+    def zero_balance(self):
+        self.field_vars["credit"].set("00:00")
+        self.field_vars["debit"].set("00:00")
+
+    def show_employees(self):
+        self.clear()
+        frame = tk.Frame(self, bg="#eeeeee")
+        frame.pack(fill="both", expand=True, padx=12, pady=12)
+        tk.Label(frame, text="Funcionários", bg="#eeeeee", fg="#777777", font=("Arial", 24, "bold")).pack(anchor="w")
+        tree = ttk.Treeview(frame, columns=("id", "clock", "name", "department", "weekday", "sat", "tol"), show="headings")
+        for col, title, width in [
+            ("id", "Código", 70),
+            ("clock", "Crachá", 80),
+            ("name", "Nome", 220),
+            ("department", "Departamento", 150),
+            ("weekday", "Semana", 80),
+            ("sat", "Sábado", 80),
+            ("tol", "Tolerância", 80),
+        ]:
+            tree.heading(col, text=title)
+            tree.column(col, width=width)
+        tree.pack(fill="both", expand=True, pady=10)
+        for row in self.conn.execute("SELECT * FROM employees ORDER BY name"):
+            tree.insert("", "end", values=(row["id"], row["clock_id"], row["name"], row["department"], row["weekday_hours"], row["saturday_hours"], row["tolerance_minutes"]))
+        tk.Button(frame, text="Voltar", command=self.show_manual_point).pack(anchor="e")
+
+    def show_departments(self):
+        departments = [row[0] for row in self.conn.execute("SELECT DISTINCT department FROM employees WHERE department IS NOT NULL AND department <> '' ORDER BY department")]
+        messagebox.showinfo("Departamento", "\n".join(departments) or "Nenhum departamento cadastrado.")
+
+    def show_parameters(self):
+        messagebox.showinfo("Parâmetros", f"Banco local:\n{DB_PATH}")
+
+    def show_report(self):
+        employee_id = self.selected_employee_id()
+        if not employee_id:
+            self.show_manual_point()
+            return
+        rows = self.conn.execute(
+            """
+            SELECT e.name, SUM(COALESCE(credit_decimal, 0)), SUM(COALESCE(debit_decimal, 0)), COUNT(*)
+            FROM time_entries t
+            JOIN employees e ON e.id = t.employee_id
+            WHERE t.employee_id = ? AND t.month = ? AND t.year = ?
+            GROUP BY e.name
+            """,
+            (employee_id, self.selected_month(), int(self.year_var.get() or date.today().year)),
+        ).fetchone()
+        if not rows:
+            messagebox.showinfo("Relatório", "Sem dados para o filtro atual.")
+            return
+        messagebox.showinfo("Relatório", f"Funcionário: {rows[0]}\nDias: {rows[3]}\nCrédito: {rows[1]:.2f}\nDébito: {rows[2]:.2f}")
+
+    def backup_info(self):
+        messagebox.showinfo("Cópia Segurança", f"Faça cópia deste arquivo:\n{DB_PATH}")
+
+    def about(self):
+        messagebox.showinfo("Sobre", f"Sistema de ponto local\nVersão {APP_VERSION}")
+
+    def not_ready(self):
+        messagebox.showinfo("Em desenvolvimento", "Este módulo será implementado na próxima etapa.")
+
+
+def hhmm(value):
+    normalized = normalize_time(value)
+    return normalized or ""
+
+
+def normalize_time(value):
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text or text == "00:00:00":
+        return None
+    parts = text.split(":")
+    if len(parts) < 2:
+        return None
+    try:
+        hour = int(parts[0])
+        minute = int(parts[1])
+    except ValueError:
+        return None
+    if minute > 59:
+        return None
+    return f"{hour:02d}:{minute:02d}"
+
+
+def minutes(value):
+    text = normalize_time(value)
+    if not text:
+        return 0
+    hour, minute = text.split(":")
+    return int(hour) * 60 + int(minute)
+
+
+def format_minutes(total):
+    total = int(total or 0)
+    hour, minute = divmod(abs(total), 60)
+    prefix = "-" if total < 0 else ""
+    return f"{prefix}{hour:02d}:{minute:02d}"
+
+
+def calculate_worked(values):
+    times = [minutes(value) for value in values if normalize_time(value)]
+    total = 0
+    for index in range(0, len(times) - 1, 2):
+        total += max(0, times[index + 1] - times[index])
+    return total
+
+
+def decimal_to_hhmm(value):
+    if value in (None, ""):
+        return ""
+    try:
+        return format_minutes(round(float(value) * 60))
+    except ValueError:
+        return ""
+
+
+if __name__ == "__main__":
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    app = PontoDesktop()
+    app.mainloop()
