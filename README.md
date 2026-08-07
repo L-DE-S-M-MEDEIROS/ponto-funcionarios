@@ -5,6 +5,7 @@ Aplicacao local para controle de ponto, banco de horas e relatorios mensais.
 ## Programa desktop
 
 - Abra `Abrir_Ponto_Desktop.bat` para usar a versao de Windows.
+- O atalho da Area de Trabalho usa `Abrir_Ponto_Desktop.vbs` para abrir sem janela de CMD.
 - Versao atual: `26.8`.
 - Ela usa o banco local `data/ponto_funcionarios.db`.
 - A tela principal replica o fluxo do sistema antigo: menus, consulta/edicao de ponto, inclusao manual, gravar, incluir, cancelar, excluir e sair.
