@@ -1,11 +1,11 @@
 ﻿{
-    "version":  "26.08.8",
+    "version":  "26.08.9",
     "author":  "L DE S M MEDEIROS",
     "type":  "installer",
-    "url":  "https://github.com/L-DE-S-M-MEDEIROS/ponto-funcionarios/releases/download/v26.08.8/Instalador.Ponto.Funcionarios.exe",
-    "sha256":  "ec47acaadaf781dd67888db0c1017e15523b28c82a432e70313e51b2914362de",
-    "title":  "Versao 26.08.8",
-    "description":  "Melhora o instalador: fecha o app, faz backup do banco, limpa arquivos antigos e preserva os dados locais.",
+    "url":  "https://github.com/L-DE-S-M-MEDEIROS/ponto-funcionarios/releases/download/v26.08.9/Instalador.Ponto.Funcionarios.exe",
+    "sha256":  "4420e08c78f2b7da26fec27fed154f51301be39b72a588d5c56d2ae8304282db",
+    "title":  "Versao 26.08.9",
+    "description":  "Melhora a conferencia individual, padroniza o espelho de ponto e gera PDF pronto para impressao.",
     "publishedAt":  "2026-08-07",
     "critical":  false
 }

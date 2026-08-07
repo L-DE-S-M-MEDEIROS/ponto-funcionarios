@@ -1,5 +1,6 @@
 import sqlite3
 import json
+import os
 import sys
 import tkinter as tk
 import urllib.request
@@ -14,7 +15,7 @@ if getattr(sys, "frozen", False):
 else:
     APP_DIR = Path(__file__).resolve().parent
 DB_PATH = APP_DIR / "data" / "ponto_funcionarios.db"
-APP_VERSION = "26.08.8"
+APP_VERSION = "26.08.9"
 UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/L-DE-S-M-MEDEIROS/ponto-funcionarios/main/version.json"
 
 
@@ -460,7 +461,324 @@ class PontoDesktop(tk.Tk):
             )
         self.hours_month_var.set(format_minutes(worked_total))
 
+    def collect_individual_conference(self, employee_id, month, year):
+        employee = self.conn.execute("SELECT * FROM employees WHERE id = ?", (employee_id,)).fetchone()
+        if not employee:
+            return None
+
+        rows = self.conn.execute(
+            """
+            SELECT *
+            FROM time_entries
+            WHERE employee_id = ? AND month = ? AND year = ?
+            ORDER BY day, id
+            """,
+            (employee_id, month, year),
+        ).fetchall()
+        if not rows:
+            return {"employee": employee, "month": month, "year": year, "rows": []}
+
+        credit_total = 0
+        debit_total = 0
+        worked_total = 0
+        expected_total = 0
+        night_total = 0
+        absence_total = 0
+        balance = 0
+        entries = []
+
+        for row in rows:
+            credit = entry_minutes(row, "credit_decimal", "credit_hours")
+            debit = entry_minutes(row, "debit_decimal", "debit_hours")
+            worked = minutes(row["worked_hours"])
+            expected = minutes(row["expected_hours"])
+            night = entry_minutes(row, "extra_night_decimal", None)
+            balance += credit - debit
+            absence = (row["absence"] or "").upper() == "S"
+            note = row["note"] or ("Falta" if absence else "")
+
+            credit_total += credit
+            debit_total += debit
+            worked_total += worked
+            expected_total += expected
+            night_total += night
+            absence_total += 1 if absence else 0
+
+            entries.append(
+                {
+                    "date": entry_date_label(row, month, year),
+                    "weekday": weekday_label(row["work_date"], row["day"], month, year),
+                    "entrada1": hhmm(row["entrada1"]),
+                    "saida1": hhmm(row["saida1"]),
+                    "entrada2": hhmm(row["entrada2"]),
+                    "saida2": hhmm(row["saida2"]),
+                    "entrada3": hhmm(row["entrada3"]),
+                    "saida3": hhmm(row["saida3"]),
+                    "entrada4": hhmm(row["entrada4"]),
+                    "saida4": hhmm(row["saida4"]),
+                    "expected": format_minutes(expected),
+                    "worked": format_minutes(worked),
+                    "note": note,
+                    "credit": format_minutes(credit) if credit else "",
+                    "debit": format_minutes(debit) if debit else "",
+                    "night": format_minutes(night) if night else "",
+                    "balance": format_minutes(balance),
+                }
+            )
+
+        return {
+            "employee": employee,
+            "month": month,
+            "year": year,
+            "month_label": month_name(month),
+            "rows": entries,
+            "totals": {
+                "days": len(rows),
+                "worked": worked_total,
+                "expected": expected_total,
+                "credit": credit_total,
+                "debit": debit_total,
+                "balance": credit_total - debit_total,
+                "night": night_total,
+                "absences": absence_total,
+            },
+        }
+
+    def current_individual_conference(self, title="Conferência Individual"):
+        employee_id = self.selected_employee_id()
+        if not employee_id:
+            messagebox.showwarning(title, "Selecione um funcionário.")
+            return None
+        try:
+            year = int(self.year_var.get() or date.today().year)
+        except ValueError:
+            messagebox.showwarning(title, "Informe um ano válido.")
+            return None
+
+        data = self.collect_individual_conference(employee_id, self.selected_month(), year)
+        if not data or not data["rows"]:
+            messagebox.showinfo(title, "Sem dados para o funcionário e mês selecionados.")
+            return None
+        return data
+
     def show_individual_conference(self):
+        data = self.current_individual_conference()
+        if not data:
+            return
+
+        window = tk.Toplevel(self)
+        window.title("Conferência Individual")
+        window.geometry("1120x680")
+        window.configure(bg="#f3f6f8")
+        window.transient(self)
+        window.columnconfigure(0, weight=1)
+        window.rowconfigure(2, weight=1)
+
+        header = tk.Frame(window, bg="#0b7285", height=72)
+        header.grid(row=0, column=0, columnspan=2, sticky="ew")
+        header.grid_propagate(False)
+        header.columnconfigure(0, weight=1)
+        tk.Label(header, text="RELATÓRIO ESPELHO DE PONTO", bg="#0b7285", fg="white", font=("Arial", 18, "bold")).grid(row=0, column=0, sticky="w", padx=18, pady=(10, 0))
+        tk.Label(header, text=f"{data['employee']['name']}  |  {data['month_label']} / {data['year']}  |  {data['employee']['department'] or 'Sem departamento'}", bg="#0b7285", fg="#d9f5f8", font=("Arial", 10, "bold")).grid(row=1, column=0, sticky="w", padx=18)
+        tk.Label(header, text=f"Versão {APP_VERSION}", bg="#0b7285", fg="#d9f5f8", font=("Arial", 10, "bold")).grid(row=0, column=1, rowspan=2, sticky="e", padx=18)
+
+        info = tk.Frame(window, bg="#f3f6f8")
+        info.grid(row=1, column=0, columnspan=2, sticky="ew", padx=14, pady=12)
+        info.columnconfigure(0, weight=1)
+        employee_text = f"Funcionário: {data['employee']['name']}    ID relógio: {data['employee']['clock_id'] or '-'}    PIS: {data['employee']['pis'] or '-'}    CPF: {data['employee']['cpf'] or '-'}"
+        tk.Label(info, text=employee_text, bg="#f3f6f8", fg="#1f2933", font=("Arial", 10, "bold")).grid(row=0, column=0, sticky="w")
+
+        summary = tk.Frame(info, bg="#f3f6f8")
+        summary.grid(row=1, column=0, sticky="ew", pady=(10, 0))
+        summary_items = [
+            ("Dias", str(data["totals"]["days"])),
+            ("Previstas", format_minutes(data["totals"]["expected"])),
+            ("Trabalhadas", format_minutes(data["totals"]["worked"])),
+            ("Crédito", format_minutes(data["totals"]["credit"])),
+            ("Débito", format_minutes(data["totals"]["debit"])),
+            ("Saldo", format_minutes(data["totals"]["balance"])),
+            ("Adicional", format_minutes(data["totals"]["night"])),
+            ("Faltas", str(data["totals"]["absences"])),
+        ]
+        for index, (label, value) in enumerate(summary_items):
+            card = tk.Frame(summary, bg="white", highlightbackground="#d6dde3", highlightthickness=1)
+            card.grid(row=0, column=index, sticky="ew", padx=(0, 8))
+            summary.columnconfigure(index, weight=1)
+            color = "#0b7285"
+            if label == "Débito" or (label == "Saldo" and data["totals"]["balance"] < 0):
+                color = "#b42318"
+            elif label == "Crédito":
+                color = "#157347"
+            tk.Label(card, text=label.upper(), bg="white", fg="#52616b", font=("Arial", 8, "bold")).pack(anchor="w", padx=10, pady=(7, 0))
+            tk.Label(card, text=value, bg="white", fg=color, font=("Arial", 14, "bold")).pack(anchor="w", padx=10, pady=(0, 8))
+
+        style = ttk.Style(window)
+        style.configure("Conference.Treeview", rowheight=24, font=("Arial", 9))
+        style.configure("Conference.Treeview.Heading", font=("Arial", 9, "bold"))
+        columns = ("date", "weekday", "entrada1", "saida1", "entrada2", "saida2", "entrada3", "saida3", "entrada4", "saida4", "worked", "note", "debit", "credit", "night", "balance")
+        tree = ttk.Treeview(window, columns=columns, show="headings", height=18, style="Conference.Treeview")
+        headings = ["Data", "Dia", "Entrada", "Saída", "Entrada", "Saída", "Entrada", "Saída", "Entrada", "Saída", "Trab.", "Ocorrências", "Débito", "Crédito", "Adic.", "Saldo"]
+        widths = [74, 54, 66, 66, 66, 66, 66, 66, 66, 66, 70, 180, 70, 70, 66, 72]
+        for col, heading, width in zip(columns, headings, widths):
+            tree.heading(col, text=heading)
+            tree.column(col, width=width, minwidth=width, stretch=col == "note")
+        tree.grid(row=2, column=0, columnspan=2, sticky="nsew", padx=10, pady=6)
+        tree.tag_configure("debit", foreground="#b42318")
+        tree.tag_configure("credit", foreground="#157347")
+
+        for row in data["rows"]:
+            tags = []
+            if row["debit"]:
+                tags.append("debit")
+            elif row["credit"]:
+                tags.append("credit")
+            tree.insert(
+                "",
+                "end",
+                values=(
+                    row["date"],
+                    row["weekday"],
+                    row["entrada1"],
+                    row["saida1"],
+                    row["entrada2"],
+                    row["saida2"],
+                    row["entrada3"],
+                    row["saida3"],
+                    row["entrada4"],
+                    row["saida4"],
+                    row["worked"],
+                    row["note"],
+                    row["debit"],
+                    row["credit"],
+                    row["night"],
+                    row["balance"],
+                ),
+                tags=tags,
+            )
+
+        bottom = tk.Frame(window, bg="#f3f6f8")
+        bottom.grid(row=3, column=0, columnspan=2, sticky="ew", padx=10, pady=8)
+        tk.Label(bottom, text="Conferência pronta para impressão no formato espelho de ponto.", bg="#f3f6f8", fg="#555555").pack(side="left")
+        tk.Button(bottom, text="Gerar PDF", width=14, command=lambda: self.export_individual_pdf(data)).pack(side="right", padx=(6, 0))
+        tk.Button(bottom, text="Fechar", width=12, command=window.destroy).pack(side="right")
+
+    def export_individual_pdf(self, data=None, open_after=True):
+        if data is None:
+            data = self.current_individual_conference("Impressão do Ponto")
+            if not data:
+                return None
+        try:
+            pdf_path = self.generate_individual_conference_pdf(data)
+        except Exception as exc:
+            messagebox.showerror("Impressão do Ponto", f"Não foi possível gerar o PDF.\n\n{exc}")
+            return None
+
+        if open_after:
+            try:
+                os.startfile(pdf_path)
+            except OSError:
+                pass
+            messagebox.showinfo("Impressão do Ponto", f"PDF gerado para impressão:\n{pdf_path}")
+        return pdf_path
+
+    def generate_individual_conference_pdf(self, data):
+        from reportlab.lib import colors
+        from reportlab.lib.pagesizes import A4, landscape
+        from reportlab.lib.styles import getSampleStyleSheet
+        from reportlab.lib.units import mm
+        from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+
+        report_dir = APP_DIR / "relatorios" / str(data["year"]) / f"{data['month']:02d}"
+        report_dir.mkdir(parents=True, exist_ok=True)
+        filename = f"{safe_filename(data['employee']['name'])}_PONTO_{data['year']}_{data['month']:02d}.pdf"
+        pdf_path = report_dir / filename
+
+        doc = SimpleDocTemplate(str(pdf_path), pagesize=landscape(A4), leftMargin=8 * mm, rightMargin=8 * mm, topMargin=6 * mm, bottomMargin=6 * mm, title="Relatório Espelho de Ponto")
+        styles = getSampleStyleSheet()
+        story = []
+        story.append(
+            Table(
+                [[Paragraph("<b>RELATÓRIO ESPELHO DE PONTO</b><br/>BOLSAS BABY", styles["Normal"]), Paragraph(f"<b>Competência:</b> {data['month_label']} / {data['year']}<br/><b>Gerado:</b> {datetime.now():%d/%m/%Y %H:%M}", styles["Normal"])]],
+                colWidths=[194 * mm, 75 * mm],
+                style=[
+                    ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#0b7285")),
+                    ("TEXTCOLOR", (0, 0), (-1, -1), colors.white),
+                    ("BOX", (0, 0), (-1, -1), 0.7, colors.HexColor("#0b7285")),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 8),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+                    ("TOPPADDING", (0, 0), (-1, -1), 5),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ],
+            )
+        )
+        story.append(Spacer(1, 3 * mm))
+
+        employee = data["employee"]
+        employee_rows = [
+            ["Funcionário", employee["name"], "ID Relógio", employee["clock_id"] or "-", "Departamento", employee["department"] or "-"],
+            ["CPF", employee["cpf"] or "-", "PIS", employee["pis"] or "-", "Função", employee["role"] or "-"],
+        ]
+        story.append(
+            Table(
+                employee_rows,
+                colWidths=[24 * mm, 77 * mm, 24 * mm, 35 * mm, 28 * mm, 81 * mm],
+                style=[
+                    ("GRID", (0, 0), (-1, -1), 0.3, colors.HexColor("#b9c4cc")),
+                    ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#eef3f6")),
+                    ("BACKGROUND", (2, 0), (2, -1), colors.HexColor("#eef3f6")),
+                    ("BACKGROUND", (4, 0), (4, -1), colors.HexColor("#eef3f6")),
+                    ("FONTNAME", (0, 0), (-1, -1), "Helvetica"),
+                    ("FONTSIZE", (0, 0), (-1, -1), 7),
+                    ("TOPPADDING", (0, 0), (-1, -1), 2),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+                    ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
+                    ("FONTNAME", (2, 0), (2, -1), "Helvetica-Bold"),
+                    ("FONTNAME", (4, 0), (4, -1), "Helvetica-Bold"),
+                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ],
+            )
+        )
+        story.append(Spacer(1, 2 * mm))
+
+        headers = ["Data", "Dia", "Entrada", "Saída", "Entrada", "Saída", "Entrada", "Saída", "Entrada", "Saída", "Trab.", "Ocorrências", "Débito", "Crédito", "Adic.", "Saldo"]
+        table_data = [headers]
+        for row in data["rows"]:
+            table_data.append([row["date"], row["weekday"], row["entrada1"], row["saida1"], row["entrada2"], row["saida2"], row["entrada3"], row["saida3"], row["entrada4"], row["saida4"], row["worked"], row["note"], row["debit"], row["credit"], row["night"], row["balance"]])
+        totals = data["totals"]
+        table_data.append(["TOTAL", "", "", "", "", "", "", "", "", "", format_minutes(totals["worked"]), f"Faltas: {totals['absences']}", format_minutes(totals["debit"]), format_minutes(totals["credit"]), format_minutes(totals["night"]), format_minutes(totals["balance"])])
+        table = Table(table_data, repeatRows=1, colWidths=[16 * mm, 12 * mm, 15 * mm, 15 * mm, 15 * mm, 15 * mm, 15 * mm, 15 * mm, 15 * mm, 15 * mm, 16 * mm, 46 * mm, 16 * mm, 16 * mm, 15 * mm, 16 * mm])
+        table.setStyle(
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#e8eef2")),
+                    ("TEXTCOLOR", (0, 0), (-1, 0), colors.HexColor("#17324d")),
+                    ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                    ("FONTSIZE", (0, 0), (-1, -1), 5.8),
+                    ("GRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#b9c4cc")),
+                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                    ("TOPPADDING", (0, 0), (-1, -1), 1),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 1),
+                    ("ALIGN", (0, 0), (10, -1), "CENTER"),
+                    ("ALIGN", (12, 0), (-1, -1), "CENTER"),
+                    ("BACKGROUND", (0, -1), (-1, -1), colors.HexColor("#f7fafc")),
+                    ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
+                ]
+            )
+        )
+        story.append(table)
+        story.append(Spacer(1, 3 * mm))
+
+        totals_text = f"Total de Horas Trabalhadas: {format_minutes(totals['worked'])}    Total de Atrasos/Débitos: {format_minutes(totals['debit'])}    Total de Horas Extras/Créditos: {format_minutes(totals['credit'])}    Adicional Noturno: {format_minutes(totals['night'])}    Saldo: {format_minutes(totals['balance'])}"
+        story.append(Paragraph(totals_text, styles["Normal"]))
+        story.append(Spacer(1, 5 * mm))
+        story.append(Paragraph("Ass: ______________________________________________", styles["Normal"]))
+        story.append(Spacer(1, 2 * mm))
+        story.append(Paragraph(f"Eu, {employee['name']}, reconheço a exatidão das informações acima.", styles["Normal"]))
+        doc.build(story)
+        return pdf_path
+
+    def show_individual_conference_old(self):
         employee_id = self.selected_employee_id()
         if not employee_id:
             messagebox.showwarning("Conferência Individual", "Selecione um funcionário.")
@@ -998,6 +1316,11 @@ class PontoDesktop(tk.Tk):
         messagebox.showinfo("Parâmetros", f"Banco local:\n{DB_PATH}")
 
     def show_report(self):
+        if not hasattr(self, "employee_var"):
+            self.show_manual_point()
+            return
+        self.export_individual_pdf()
+        return
         employee_id = self.selected_employee_id()
         if not employee_id:
             self.show_manual_point()
@@ -1168,6 +1491,65 @@ def decimal_to_hhmm(value):
         return format_minutes(round(float(value) * 60))
     except ValueError:
         return ""
+
+
+def entry_minutes(row, decimal_key, time_key):
+    if decimal_key:
+        try:
+            value = row[decimal_key]
+            if value not in (None, ""):
+                return round(float(value) * 60)
+        except (KeyError, TypeError, ValueError):
+            pass
+    if time_key:
+        try:
+            return minutes(row[time_key])
+        except (KeyError, TypeError):
+            return 0
+    return 0
+
+
+def month_name(month):
+    return next((label for number, label in MONTHS if int(number) == int(month)), str(month))
+
+
+def entry_date_label(row, month, year):
+    work_date = row["work_date"]
+    if work_date:
+        try:
+            current = datetime.strptime(work_date, "%Y-%m-%d")
+            if current.day == int(row["day"]) and current.month == int(month) and current.year == int(year):
+                return current.strftime("%d/%m/%Y")
+        except ValueError:
+            pass
+    return f"{int(row['day']):02d}/{int(month):02d}/{int(year)}"
+
+
+def weekday_label(work_date, day, month, year):
+    labels = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"]
+    try:
+        if work_date:
+            current = datetime.strptime(work_date, "%Y-%m-%d").date()
+            if current.day != int(day) or current.month != int(month) or current.year != int(year):
+                current = date(int(year), int(month), int(day))
+        else:
+            current = date(int(year), int(month), int(day))
+        return labels[current.weekday()]
+    except (TypeError, ValueError):
+        return ""
+
+
+def safe_filename(value):
+    allowed = []
+    for char in str(value).strip():
+        if char.isalnum() or char in (" ", "-", "_"):
+            allowed.append(char)
+        else:
+            allowed.append("_")
+    name = "".join(allowed).strip().replace(" ", "_")
+    while "__" in name:
+        name = name.replace("__", "_")
+    return name or "FUNCIONARIO"
 
 
 if __name__ == "__main__":

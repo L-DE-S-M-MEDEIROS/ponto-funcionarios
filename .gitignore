@@ -7,6 +7,8 @@ build-*/
 dist/
 dist-*/
 release/
+relatorios/
+tmp/
 *.tmp
 
 # Dados locais de funcionarios e ponto nao devem ir para GitHub publico.
