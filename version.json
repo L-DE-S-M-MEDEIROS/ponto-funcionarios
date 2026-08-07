@@ -1,11 +1,11 @@
 ﻿{
-    "version":  "26.08.3",
+    "version":  "26.08.4",
     "author":  "L DE S M MEDEIROS",
     "type":  "installer",
-    "url":  "https://github.com/L-DE-S-M-MEDEIROS/ponto-funcionarios/releases/download/v26.08.3/Instalador.Ponto.Funcionarios.exe",
-    "sha256":  "3bf3c42ce68def22429f0fb9352b952bb7ccac90c04b53db1508b148fcdfe1c8",
-    "title":  "Versao 26.08.3",
-    "description":  "Implementa o botao Importar Ponto para ler TXT do relogio, agrupar batidas por funcionario e dia, calcular horas trabalhadas, credito e debito.",
+    "url":  "https://github.com/L-DE-S-M-MEDEIROS/ponto-funcionarios/releases/download/v26.08.4/Instalador.Ponto.Funcionarios.exe",
+    "sha256":  "c64cb5e28e3014561baa280716580623254a442c25160fa0a750ca8733c7d068",
+    "title":  "Versao 26.08.4",
+    "description":  "Corrige o instalador para chamar cmd.exe no Windows atual ao executar a rotina de instalacao.",
     "publishedAt":  "2026-08-07",
     "critical":  false
 }

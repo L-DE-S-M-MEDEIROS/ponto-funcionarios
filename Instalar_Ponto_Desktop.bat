@@ -10,9 +10,12 @@ echo Instalando Ponto Funcionarios...
 echo Origem: "%SOURCE_DIR%"
 echo Destino: "%INSTALL_DIR%"
 
+set "INTERACTIVE=1"
+if /I "%~1"=="/quiet" set "INTERACTIVE=0"
+
 if not exist "%SOURCE_DIR%PontoFuncionarios.exe" if not exist "%SOURCE_DIR%desktop_app.py" (
   echo ERRO: arquivos do programa nao encontrados na pasta do instalador.
-  pause
+  if "%INTERACTIVE%"=="1" pause
   exit /b 1
 )
 
@@ -45,7 +48,7 @@ if exist "%INSTALL_DIR%\PontoFuncionarios.exe" (
 
 if errorlevel 1 (
   echo ERRO: nao foi possivel criar o atalho na Area de Trabalho.
-  pause
+  if "%INTERACTIVE%"=="1" pause
   exit /b 1
 )
 
@@ -53,4 +56,4 @@ echo.
 echo Instalacao concluida.
 echo Atalho criado: "%DESKTOP_DIR%\%SHORTCUT_NAME%"
 echo.
-pause
+if "%INTERACTIVE%"=="1" pause
