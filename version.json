@@ -3,9 +3,9 @@
     "author":  "L DE S M MEDEIROS",
     "type":  "installer",
     "url":  "https://github.com/L-DE-S-M-MEDEIROS/ponto-funcionarios/releases/download/v26.8/Instalador.Ponto.Funcionarios.exe",
-    "sha256":  "a0039afa3a922aa50f27237b01f4b05c5530f32a8700ed8703759721f276fc9c",
-    "title":  "Atalho sem janela de CMD",
-    "description":  "O atalho da Area de Trabalho agora abre o sistema por VBS com pythonw, ocultando a janela de CMD. O instalador preserva o banco local existente.",
+    "sha256":  "fbb6dc62abeeb222b49a63f43dc6eea96f3d7e9a8da55381c15d57a5d099f3e0",
+    "title":  "Abertura no menu principal",
+    "description":  "O sistema agora abre no menu principal com botoes de Funcionario, Entrada/Saida, Consulta Entrada/Saida, Importar Ponto e Sair. A tela de alteracao fica no botao Consulta.",
     "publishedAt":  "2026-08-07",
     "critical":  false
 }

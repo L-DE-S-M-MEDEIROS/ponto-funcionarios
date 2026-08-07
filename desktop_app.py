@@ -1,6 +1,6 @@
 import sqlite3
 import tkinter as tk
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 from tkinter import messagebox, ttk
 
@@ -39,7 +39,7 @@ class PontoDesktop(tk.Tk):
         self.conn.row_factory = sqlite3.Row
         self.ensure_schema()
         self.create_menu()
-        self.show_login()
+        self.show_home()
 
     def ensure_schema(self):
         self.conn.execute(
@@ -195,6 +195,56 @@ class PontoDesktop(tk.Tk):
         footer.pack_propagate(False)
         tk.Label(footer, text="BOLSAS BABY  |  Controle de ponto local", bg="#2b2b2b", fg="white", font=("Arial", 9, "bold")).pack(side="right", padx=24)
 
+    def show_home(self):
+        self.clear()
+        self.configure(bg="white")
+        self.selected_entry_id = None
+        root = tk.Frame(self, bg="white")
+        root.pack(fill="both", expand=True)
+
+        toolbar = tk.Frame(root, bg="white")
+        toolbar.pack(anchor="nw", padx=2, pady=2)
+
+        self.home_button(toolbar, "👥", "Funcionário", self.show_employees, 0, 0)
+        self.home_button(toolbar, "📝", "Entrada / Saída(F3)", self.not_ready, 0, 1, width=20)
+        self.home_button(toolbar, "🔎", "Consulta Entrada/Saída(F4)", self.show_manual_point, 0, 2, width=26)
+        self.home_button(toolbar, "❌", "Sair(F5)", self.destroy, 0, 3, width=12)
+        self.home_button(toolbar, "🟢", "Importar Ponto", self.not_ready, 1, 0)
+
+        self.clock_var = tk.StringVar()
+        clock_frame = tk.Frame(root, bg="white")
+        clock_frame.place(x=865, y=88)
+        tk.Button(clock_frame, text="?", width=2, command=self.about, fg="white", bg="#4b56c2", font=("Arial", 12, "bold")).pack(side="left", padx=(0, 8))
+        tk.Label(clock_frame, textvariable=self.clock_var, bg="#fffaa3", fg="black", font=("Arial", 26, "bold"), bd=1, relief="solid", padx=8).pack(side="left")
+        self.update_clock()
+
+        self.bind("<F3>", lambda _event: self.not_ready())
+        self.bind("<F4>", lambda _event: self.show_manual_point())
+        self.bind("<F5>", lambda _event: self.destroy())
+
+    def home_button(self, parent, icon, text, command, row, column, width=18):
+        button = tk.Button(
+            parent,
+            text=f"{icon} {text}",
+            command=command,
+            width=width,
+            height=2,
+            anchor="w",
+            bg="#f4f4f4",
+            activebackground="#e8eef5",
+            font=("Arial", 12, "bold"),
+            relief="raised",
+            bd=1,
+            padx=12,
+        )
+        button.grid(row=row, column=column, sticky="w", padx=1, pady=1)
+        return button
+
+    def update_clock(self):
+        if hasattr(self, "clock_var"):
+            self.clock_var.set(datetime.now().strftime("%H:%M:%S"))
+            self.after(1000, self.update_clock)
+
     def show_manual_point(self):
         self.clear()
         self.selected_entry_id = None
@@ -301,12 +351,12 @@ class PontoDesktop(tk.Tk):
         tk.Button(bottom, text="➕\nIncluir(F2)", width=12, height=3, command=self.clear_form).pack(side="left")
         tk.Button(bottom, text="❌\nCancelar(F3)", width=12, height=3, command=self.clear_form).pack(side="left")
         tk.Button(bottom, text="🗑\nExcluir", width=12, height=3, command=self.delete_entry).pack(side="left")
-        tk.Button(bottom, text="❌\nSair(F5)", width=12, height=3, command=self.show_login).pack(side="right")
+        tk.Button(bottom, text="❌\nSair(F5)", width=12, height=3, command=self.show_home).pack(side="right")
 
         self.bind("<F1>", lambda _event: self.save_entry())
         self.bind("<F2>", lambda _event: self.clear_form())
         self.bind("<F3>", lambda _event: self.clear_form())
-        self.bind("<F5>", lambda _event: self.show_login())
+        self.bind("<F5>", lambda _event: self.show_home())
 
         employees = self.employee_options()
         if employees:
@@ -556,7 +606,7 @@ class PontoDesktop(tk.Tk):
         tree.pack(fill="both", expand=True, pady=10)
         for row in self.conn.execute("SELECT * FROM employees ORDER BY name"):
             tree.insert("", "end", values=(row["id"], row["clock_id"], row["name"], row["department"], row["weekday_hours"], row["saturday_hours"], row["tolerance_minutes"]))
-        tk.Button(frame, text="Voltar", command=self.show_manual_point).pack(anchor="e")
+        tk.Button(frame, text="Voltar", command=self.show_home).pack(anchor="e")
 
     def show_departments(self):
         departments = [row[0] for row in self.conn.execute("SELECT DISTINCT department FROM employees WHERE department IS NOT NULL AND department <> '' ORDER BY department")]

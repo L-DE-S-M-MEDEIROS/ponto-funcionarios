@@ -8,6 +8,7 @@ Aplicacao local para controle de ponto, banco de horas e relatorios mensais.
 - O atalho da Area de Trabalho usa `Abrir_Ponto_Desktop.vbs` para abrir sem janela de CMD.
 - Versao atual: `26.8`.
 - Ela usa o banco local `data/ponto_funcionarios.db`.
+- Ao abrir, o sistema entra no menu principal com os botoes de funcionario, entrada/saida, consulta, importar ponto e sair.
 - A tela principal replica o fluxo do sistema antigo: menus, consulta/edicao de ponto, inclusao manual, gravar, incluir, cancelar, excluir e sair.
 - O arquivo principal do programa desktop e `desktop_app.py`.
 
