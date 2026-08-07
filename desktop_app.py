@@ -14,7 +14,7 @@ if getattr(sys, "frozen", False):
 else:
     APP_DIR = Path(__file__).resolve().parent
 DB_PATH = APP_DIR / "data" / "ponto_funcionarios.db"
-APP_VERSION = "26.08.5"
+APP_VERSION = "26.08.6"
 UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/L-DE-S-M-MEDEIROS/ponto-funcionarios/main/version.json"
 
 
@@ -409,7 +409,7 @@ class PontoDesktop(tk.Tk):
         return date.today().month
 
     def load_entries(self):
-        if not hasattr(self, "tree"):
+        if not self.widget_exists("tree"):
             return
         for item in self.tree.get_children():
             self.tree.delete(item)
@@ -676,7 +676,7 @@ class PontoDesktop(tk.Tk):
         self.load_hour_bank()
 
     def load_hour_bank(self):
-        if not hasattr(self, "hour_bank_tree"):
+        if not self.widget_exists("hour_bank_tree"):
             return
         for item in self.hour_bank_tree.get_children():
             self.hour_bank_tree.delete(item)
@@ -848,9 +848,18 @@ class PontoDesktop(tk.Tk):
             updated_days += 1
 
         self.conn.commit()
-        if hasattr(self, "tree"):
+        if self.widget_exists("tree"):
             self.load_entries()
         return {"punches": len(punches), "days": updated_days, "unknown": len(unknown)}
+
+    def widget_exists(self, name):
+        widget = getattr(self, name, None)
+        if widget is None:
+            return False
+        try:
+            return bool(widget.winfo_exists())
+        except tk.TclError:
+            return False
 
     def expected_hours_for_date(self, employee, work_day):
         if work_day.weekday() == 5:

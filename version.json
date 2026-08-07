@@ -1,11 +1,11 @@
 ﻿{
-    "version":  "26.08.5",
+    "version":  "26.08.6",
     "author":  "L DE S M MEDEIROS",
     "type":  "installer",
-    "url":  "https://github.com/L-DE-S-M-MEDEIROS/ponto-funcionarios/releases/download/v26.08.5/Instalador.Ponto.Funcionarios.exe",
-    "sha256":  "a3d8321e293a2e901a1aed71b22d65fc066236acdb1eba99c97510e5fc036789",
-    "title":  "Versao 26.08.5",
-    "description":  "Implementa Conferencia Individual com totais de credito, debito, horas trabalhadas e adicional conforme os dados do sistema antigo.",
+    "url":  "https://github.com/L-DE-S-M-MEDEIROS/ponto-funcionarios/releases/download/v26.08.6/Instalador.Ponto.Funcionarios.exe",
+    "sha256":  "98677a525db2d4c5c199b01d56bdc9ac2f3089ec8100164ab8d32cb38cea0490",
+    "title":  "Versao 26.08.6",
+    "description":  "Corrige erro ao importar ponto pelo menu inicial quando a grade de consulta nao esta aberta.",
     "publishedAt":  "2026-08-07",
     "critical":  false
 }
