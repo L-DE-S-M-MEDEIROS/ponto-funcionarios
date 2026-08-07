@@ -14,7 +14,7 @@ if getattr(sys, "frozen", False):
 else:
     APP_DIR = Path(__file__).resolve().parent
 DB_PATH = APP_DIR / "data" / "ponto_funcionarios.db"
-APP_VERSION = "26.08.6"
+APP_VERSION = "26.08.7"
 UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/L-DE-S-M-MEDEIROS/ponto-funcionarios/main/version.json"
 
 
@@ -1023,7 +1023,7 @@ class PontoDesktop(tk.Tk):
     def check_updates(self):
         try:
             with urllib.request.urlopen(UPDATE_MANIFEST_URL, timeout=12) as response:
-                manifest = json.loads(response.read().decode("utf-8"))
+                manifest = json.loads(response.read().decode("utf-8-sig").lstrip("\ufeff"))
         except Exception as exc:
             messagebox.showerror(
                 "Buscar Atualizações",

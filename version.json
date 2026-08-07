@@ -1,11 +1,11 @@
 ﻿{
-    "version":  "26.08.6",
+    "version":  "26.08.7",
     "author":  "L DE S M MEDEIROS",
     "type":  "installer",
-    "url":  "https://github.com/L-DE-S-M-MEDEIROS/ponto-funcionarios/releases/download/v26.08.6/Instalador.Ponto.Funcionarios.exe",
-    "sha256":  "98677a525db2d4c5c199b01d56bdc9ac2f3089ec8100164ab8d32cb38cea0490",
-    "title":  "Versao 26.08.6",
-    "description":  "Corrige erro ao importar ponto pelo menu inicial quando a grade de consulta nao esta aberta.",
+    "url":  "https://github.com/L-DE-S-M-MEDEIROS/ponto-funcionarios/releases/download/v26.08.7/Instalador.Ponto.Funcionarios.exe",
+    "sha256":  "9591d6e8bc0ce98d53be8e9a57fca9289049f73e9b068b7a4e9127f4ad7f3e93",
+    "title":  "Versao 26.08.7",
+    "description":  "Corrige a consulta de atualizacoes para aceitar manifesto JSON com UTF-8 BOM.",
     "publishedAt":  "2026-08-07",
     "critical":  false
 }
