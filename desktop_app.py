@@ -16,7 +16,7 @@ else:
     APP_DIR = Path(__file__).resolve().parent
 DB_PATH = APP_DIR / "data" / "ponto_funcionarios.db"
 CONFIG_PATH = APP_DIR / "config.json"
-APP_VERSION = "26.08.12"
+APP_VERSION = "26.08.13"
 UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/L-DE-S-M-MEDEIROS/ponto-funcionarios/main/version.json"
 
 DEFAULT_CONFIG = {
@@ -233,6 +233,40 @@ class PontoDesktop(tk.Tk):
         menu = tk.Menu(self, tearoff=False)
 
         cadastros = tk.Menu(menu, tearoff=False)
+        cadastros.add_command(label="Funcionários", command=self.show_employees)
+        cadastros.add_command(label="Departamentos", command=self.show_departments)
+        menu.add_cascade(label="Cadastros", menu=cadastros)
+
+        ponto = tk.Menu(menu, tearoff=False)
+        ponto.add_command(label="Consultar / editar ponto", command=self.show_manual_point)
+        ponto.add_command(label="Importar batidas do relógio", command=self.import_attendance_file)
+        ponto.add_command(label="Banco de horas", command=self.show_hour_bank)
+        ponto.add_separator()
+        ponto.add_command(label="Inserir horário de almoço", command=self.insert_lunch)
+        menu.add_cascade(label="Ponto", menu=ponto)
+
+        relatorios = tk.Menu(menu, tearoff=False)
+        relatorios.add_command(label="Espelho individual em PDF", command=self.show_manual_point)
+        relatorios.add_command(label="Espelho de todos em PDF", command=self.show_manual_point)
+        relatorios.add_command(label="Ponto + banco de horas em PDF", command=self.show_manual_point)
+        relatorios.add_command(label="Banco de horas em PDF", command=self.show_hour_bank)
+        menu.add_cascade(label="Relatórios", menu=relatorios)
+
+        sistema = tk.Menu(menu, tearoff=False)
+        sistema.add_command(label="Banco de dados e conexão", command=self.show_parameters)
+        sistema.add_command(label="Buscar atualizações", command=self.check_updates)
+        sistema.add_command(label="Cópia de segurança", command=self.backup_info)
+        sistema.add_separator()
+        sistema.add_command(label="Sobre", command=self.about)
+        menu.add_cascade(label="Sistema", menu=sistema)
+
+        menu.add_command(label="Sair", command=self.destroy)
+        self.config(menu=menu)
+
+    def create_menu_old(self):
+        menu = tk.Menu(self, tearoff=False)
+
+        cadastros = tk.Menu(menu, tearoff=False)
         cadastros.add_command(label="Funcionário-Leitor Nitgen", command=self.show_employees)
         cadastros.add_command(label="Funcionário-Outros Leitores", command=self.show_employees)
         cadastros.add_command(label="Departamento", command=self.show_departments)
@@ -336,6 +370,54 @@ class PontoDesktop(tk.Tk):
 
     def show_home(self):
         self.clear()
+        self.configure(bg="#f3f6f8")
+        self.selected_entry_id = None
+
+        root = tk.Frame(self, bg="#f3f6f8")
+        root.pack(fill="both", expand=True)
+        root.columnconfigure(0, weight=1)
+        root.rowconfigure(2, weight=1)
+
+        header = tk.Frame(root, bg="#0b7285", height=86)
+        header.grid(row=0, column=0, sticky="ew")
+        header.grid_propagate(False)
+        header.columnconfigure(0, weight=1)
+        tk.Label(header, text="Ponto Funcionários", bg="#0b7285", fg="white", font=("Arial", 24, "bold")).grid(row=0, column=0, sticky="w", padx=22, pady=(13, 0))
+        tk.Label(header, text=f"BOLSAS BABY  |  Versão {APP_VERSION}  |  {self.database_label()}", bg="#0b7285", fg="#d9f5f8", font=("Arial", 10, "bold")).grid(row=1, column=0, sticky="w", padx=22)
+
+        self.clock_var = tk.StringVar()
+        clock_box = tk.Frame(header, bg="#0b7285")
+        clock_box.grid(row=0, column=1, rowspan=2, sticky="e", padx=22)
+        tk.Button(clock_box, text="?", width=3, command=self.about, fg="white", bg="#4154b3", activebackground="#34439a", font=("Arial", 11, "bold"), relief="flat").pack(side="left", padx=(0, 10))
+        tk.Label(clock_box, textvariable=self.clock_var, bg="#fffaa3", fg="#111111", font=("Arial", 24, "bold"), bd=1, relief="solid", padx=10).pack(side="left")
+        self.update_clock()
+
+        content = tk.Frame(root, bg="#f3f6f8")
+        content.grid(row=1, column=0, sticky="nsew", padx=18, pady=18)
+        content.columnconfigure((0, 1, 2), weight=1)
+
+        self.home_section(content, "Lançamentos", 0, [
+            ("Consultar / editar ponto", "Editar batidas, faltas, débitos e créditos", self.show_manual_point, "#0b7285"),
+            ("Importar batidas", "Ler arquivo TXT do relógio de ponto", self.import_attendance_file, "#157347"),
+            ("Funcionários", "Consultar cadastros e códigos do relógio", self.show_employees, "#475569"),
+        ])
+        self.home_section(content, "Relatórios", 1, [
+            ("Espelho individual", "Gerar PDF do funcionário selecionado", self.show_manual_point, "#7c3aed"),
+            ("Todos os espelhos", "PDF único, um funcionário por página", self.show_manual_point, "#7c3aed"),
+            ("Banco de horas", "Resumo anual e PDF de saldos", self.show_hour_bank, "#b45309"),
+        ])
+        self.home_section(content, "Sistema", 2, [
+            ("Banco de dados", "Local ou PostgreSQL da empresa", self.show_parameters, "#334155"),
+            ("Buscar atualizações", "Verificar nova versão no GitHub", self.check_updates, "#0369a1"),
+            ("Sair", "Fechar o sistema", self.destroy, "#b42318"),
+        ])
+
+        self.bind("<F3>", lambda _event: self.not_ready())
+        self.bind("<F4>", lambda _event: self.show_manual_point())
+        self.bind("<F5>", lambda _event: self.destroy())
+
+    def show_home_old(self):
+        self.clear()
         self.configure(bg="white")
         self.selected_entry_id = None
         root = tk.Frame(self, bg="white")
@@ -361,6 +443,32 @@ class PontoDesktop(tk.Tk):
         self.bind("<F3>", lambda _event: self.not_ready())
         self.bind("<F4>", lambda _event: self.show_manual_point())
         self.bind("<F5>", lambda _event: self.destroy())
+
+    def home_section(self, parent, title, column, actions):
+        section = tk.Frame(parent, bg="white", highlightbackground="#d6dde3", highlightthickness=1)
+        section.grid(row=0, column=column, sticky="nsew", padx=8)
+        section.columnconfigure(0, weight=1)
+
+        tk.Label(section, text=title, bg="white", fg="#1f2933", font=("Arial", 15, "bold")).grid(row=0, column=0, sticky="w", padx=16, pady=(14, 8))
+        for index, (label, detail, command, color) in enumerate(actions, start=1):
+            button = tk.Button(
+                section,
+                text=f"{label}\n{detail}",
+                command=command,
+                anchor="w",
+                justify="left",
+                bg="#f8fafc",
+                fg="#111827",
+                activebackground="#eef4f8",
+                relief="flat",
+                bd=0,
+                padx=12,
+                pady=8,
+                font=("Arial", 10, "bold"),
+            )
+            button.grid(row=index, column=0, sticky="ew", padx=12, pady=5)
+            marker = tk.Frame(section, bg=color, width=5, height=48)
+            marker.grid(row=index, column=0, sticky="w", padx=(12, 0), pady=5)
 
     def home_button(self, parent, icon, text, command, row, column, width=18):
         button = tk.Button(
@@ -389,19 +497,19 @@ class PontoDesktop(tk.Tk):
         self.clear()
         self.selected_entry_id = None
 
-        root = tk.Frame(self, bg="#eeeeee")
+        root = tk.Frame(self, bg="#f3f6f8")
         root.pack(fill="both", expand=True, padx=8, pady=8)
 
-        title = tk.Label(root, text="Ponto Inclusão Manual", bg="#eeeeee", fg="#777777", font=("Arial", 26, "bold"))
+        title = tk.Label(root, text="Lançamento e Conferência de Ponto", bg="#f3f6f8", fg="#1f2933", font=("Arial", 22, "bold"))
         title.grid(row=0, column=0, columnspan=4, sticky="w")
 
-        top_buttons = tk.Frame(root, bg="#eeeeee")
+        top_buttons = tk.Frame(root, bg="#f3f6f8")
         top_buttons.grid(row=0, column=4, columnspan=5, sticky="ew", padx=4)
-        tk.Button(top_buttons, text="Alinha os dias sem intervalo", command=self.not_ready).pack(side="left", padx=4)
-        tk.Button(top_buttons, text="Insere horário de almoço", command=self.insert_lunch).pack(side="left", padx=4)
-        tk.Button(top_buttons, text="Clique aqui para Zerar o saldo do Funcionário", command=self.zero_balance).pack(side="left", padx=4)
+        tk.Button(top_buttons, text="Alinhar dias", command=self.not_ready, width=14).pack(side="left", padx=4)
+        tk.Button(top_buttons, text="Inserir almoço", command=self.insert_lunch, width=14).pack(side="left", padx=4)
+        tk.Button(top_buttons, text="Zerar saldo", command=self.zero_balance, width=14).pack(side="left", padx=4)
 
-        form = tk.LabelFrame(root, text="Funcionário", bg="#eeeeee", fg="black", font=("Arial", 10, "bold"))
+        form = tk.LabelFrame(root, text="Filtros do ponto", bg="#f3f6f8", fg="#1f2933", font=("Arial", 10, "bold"))
         form.grid(row=1, column=0, columnspan=7, sticky="ew", pady=4)
         form.columnconfigure(0, weight=1)
 
@@ -465,14 +573,14 @@ class PontoDesktop(tk.Tk):
         tk.Label(edit, text="Obs", bg="#eeeeee", font=("Arial", 9, "bold")).grid(row=4, column=0, sticky="w")
         tk.Entry(edit, textvariable=self.field_vars["note"]).grid(row=5, column=0, columnspan=10, sticky="ew", padx=4, pady=2)
 
-        side = tk.Frame(root, bg="#eeeeee")
+        side = tk.LabelFrame(root, text="Relatórios e consultas", bg="#f3f6f8", fg="#1f2933", font=("Arial", 10, "bold"))
         side.grid(row=1, column=7, rowspan=3, sticky="ns", padx=8)
-        tk.Button(side, text="Conferência Individual", width=22, command=self.show_individual_conference).pack(pady=4)
-        tk.Button(side, text="Conferência Todos", width=22, command=self.export_all_point_pdf).pack(pady=4)
-        tk.Button(side, text="PDF Todos Ponto/Banco", width=22, command=self.export_mass_reports_pdf).pack(pady=4)
-        tk.Button(side, text="Conferência por Período", width=22, command=self.load_entries).pack(pady=(48, 4))
-        tk.Button(side, text="Funcionários Presentes", width=22, command=self.not_ready).pack(pady=4)
-        tk.Button(side, text="Funcionários Faltantes", width=22, command=self.not_ready).pack(pady=4)
+        tk.Button(side, text="Espelho individual", width=24, command=self.show_individual_conference).pack(pady=(8, 4), padx=8)
+        tk.Button(side, text="PDF ponto de todos", width=24, command=self.export_all_point_pdf).pack(pady=4, padx=8)
+        tk.Button(side, text="PDF ponto + banco horas", width=24, command=self.export_mass_reports_pdf).pack(pady=4, padx=8)
+        tk.Button(side, text="Conferir período", width=24, command=self.load_entries).pack(pady=(24, 4), padx=8)
+        tk.Button(side, text="Funcionários presentes", width=24, command=self.not_ready).pack(pady=4, padx=8)
+        tk.Button(side, text="Funcionários faltantes", width=24, command=self.not_ready).pack(pady=4, padx=8)
 
         columns = ("day", "entrada1", "saida1", "entrada2", "saida2", "entrada3", "saida3", "entrada4", "saida4", "expected", "worked", "note", "credit", "debit", "night", "store")
         self.tree = ttk.Treeview(root, columns=columns, show="headings", height=12)
