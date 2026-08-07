@@ -16,7 +16,7 @@ else:
     APP_DIR = Path(__file__).resolve().parent
 DB_PATH = APP_DIR / "data" / "ponto_funcionarios.db"
 CONFIG_PATH = APP_DIR / "config.json"
-APP_VERSION = "26.08.11"
+APP_VERSION = "26.08.12"
 UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/L-DE-S-M-MEDEIROS/ponto-funcionarios/main/version.json"
 
 DEFAULT_CONFIG = {
@@ -468,7 +468,8 @@ class PontoDesktop(tk.Tk):
         side = tk.Frame(root, bg="#eeeeee")
         side.grid(row=1, column=7, rowspan=3, sticky="ns", padx=8)
         tk.Button(side, text="Conferência Individual", width=22, command=self.show_individual_conference).pack(pady=4)
-        tk.Button(side, text="Conferência Todos", width=22, command=self.load_entries).pack(pady=4)
+        tk.Button(side, text="Conferência Todos", width=22, command=self.export_all_point_pdf).pack(pady=4)
+        tk.Button(side, text="PDF Todos Ponto/Banco", width=22, command=self.export_mass_reports_pdf).pack(pady=4)
         tk.Button(side, text="Conferência por Período", width=22, command=self.load_entries).pack(pady=(48, 4))
         tk.Button(side, text="Funcionários Presentes", width=22, command=self.not_ready).pack(pady=4)
         tk.Button(side, text="Funcionários Faltantes", width=22, command=self.not_ready).pack(pady=4)
@@ -807,6 +808,81 @@ class PontoDesktop(tk.Tk):
                 pass
             messagebox.showinfo("Impressão do Ponto", f"PDF gerado para impressão:\n{pdf_path}")
         return pdf_path
+
+    def export_all_point_pdf(self, open_after=True):
+        try:
+            month = self.selected_month() if hasattr(self, "month_var") else date.today().month
+            year = int(self.year_var.get() if hasattr(self, "year_var") else date.today().year)
+        except ValueError:
+            messagebox.showwarning("Conferência Todos", "Informe um ano válido.")
+            return None
+
+        try:
+            pdf_path, count = self.generate_all_point_pdf(month, year)
+        except Exception as exc:
+            messagebox.showerror("Conferência Todos", f"Não foi possível gerar o PDF em massa.\n\n{exc}")
+            return None
+        if count == 0:
+            messagebox.showinfo("Conferência Todos", "Nenhum funcionário com ponto no mês selecionado.")
+            return None
+        if open_after:
+            try:
+                os.startfile(pdf_path)
+            except OSError:
+                pass
+            messagebox.showinfo("Conferência Todos", f"PDF gerado com {count} funcionário(s):\n{pdf_path}")
+        return pdf_path
+
+    def export_mass_reports_pdf(self):
+        try:
+            month = self.selected_month() if hasattr(self, "month_var") else date.today().month
+            year = int(self.year_var.get() if hasattr(self, "year_var") else date.today().year)
+        except ValueError:
+            messagebox.showwarning("Impressão em Massa", "Informe um ano válido.")
+            return
+
+        try:
+            point_path, count = self.generate_all_point_pdf(month, year)
+            bank_path = self.generate_hour_bank_pdf(self.collect_hour_bank(year, "TODOS"))
+        except Exception as exc:
+            messagebox.showerror("Impressão em Massa", f"Não foi possível gerar os PDFs.\n\n{exc}")
+            return
+        if count == 0:
+            messagebox.showinfo("Impressão em Massa", "Nenhum funcionário com ponto no mês selecionado.")
+            return
+        try:
+            os.startfile(point_path.parent)
+        except OSError:
+            pass
+        messagebox.showinfo(
+            "Impressão em Massa",
+            f"PDFs gerados:\n\nPonto ({count} funcionário(s)):\n{point_path}\n\nBanco de Horas:\n{bank_path}",
+        )
+
+    def generate_all_point_pdf(self, month, year):
+        from pypdf import PdfReader, PdfWriter
+
+        employees = self.conn.execute("SELECT id, name FROM employees ORDER BY name").fetchall()
+        report_dir = APP_DIR / "relatorios" / str(year) / f"{month:02d}"
+        report_dir.mkdir(parents=True, exist_ok=True)
+        output_path = report_dir / f"PONTO_TODOS_{year}_{month:02d}.pdf"
+        writer = PdfWriter()
+        count = 0
+
+        for employee in employees:
+            data = self.collect_individual_conference(employee["id"], month, year)
+            if not data or not data["rows"]:
+                continue
+            employee_pdf = self.generate_individual_conference_pdf(data)
+            reader = PdfReader(str(employee_pdf))
+            for page in reader.pages:
+                writer.add_page(page)
+            count += 1
+
+        if count:
+            with output_path.open("wb") as file:
+                writer.write(file)
+        return output_path, count
 
     def generate_individual_conference_pdf(self, data):
         from reportlab.lib import colors

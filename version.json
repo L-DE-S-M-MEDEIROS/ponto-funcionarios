@@ -1,11 +1,11 @@
 ﻿{
-    "version":  "26.08.11",
+    "version":  "26.08.12",
     "author":  "L DE S M MEDEIROS",
     "type":  "installer",
-    "url":  "https://github.com/L-DE-S-M-MEDEIROS/ponto-funcionarios/releases/download/v26.08.11/Instalador.Ponto.Funcionarios.exe",
-    "sha256":  "0bcb576431558af81dee9573fab4aa1651bdeca627ce35f7b8c51b4da72dcedd",
-    "title":  "Versao 26.08.11",
-    "description":  "Adiciona PDF de Banco de Horas e valida a impressao junto com o espelho de ponto.",
+    "url":  "https://github.com/L-DE-S-M-MEDEIROS/ponto-funcionarios/releases/download/v26.08.12/Instalador.Ponto.Funcionarios.exe",
+    "sha256":  "401f1f1683ab79a220894cc4c0093d21782feed71a96e8fb54a8edc6166a11cd",
+    "title":  "Versao 26.08.12",
+    "description":  "Adiciona impressao em massa: ponto de todos os funcionarios por pagina e banco de horas em PDF.",
     "publishedAt":  "2026-08-07",
     "critical":  false
 }
