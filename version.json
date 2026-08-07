@@ -1,11 +1,11 @@
 ﻿{
-    "version":  "26.08.9",
+    "version":  "26.08.10",
     "author":  "L DE S M MEDEIROS",
     "type":  "installer",
-    "url":  "https://github.com/L-DE-S-M-MEDEIROS/ponto-funcionarios/releases/download/v26.08.9/Instalador.Ponto.Funcionarios.exe",
-    "sha256":  "4420e08c78f2b7da26fec27fed154f51301be39b72a588d5c56d2ae8304282db",
-    "title":  "Versao 26.08.9",
-    "description":  "Melhora a conferencia individual, padroniza o espelho de ponto e gera PDF pronto para impressao.",
+    "url":  "https://github.com/L-DE-S-M-MEDEIROS/ponto-funcionarios/releases/download/v26.08.10/Instalador.Ponto.Funcionarios.exe",
+    "sha256":  "535c28767ba4b836ae0895925ff1b696d592fe6c64b7a363b1b833b867f9b0f4",
+    "title":  "Versao 26.08.10",
+    "description":  "Adiciona suporte ao banco da empresa PostgreSQL, migracao do SQLite e scripts de backup diario.",
     "publishedAt":  "2026-08-07",
     "critical":  false
 }

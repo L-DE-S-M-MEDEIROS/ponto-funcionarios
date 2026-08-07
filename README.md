@@ -8,8 +8,9 @@ Aplicacao local para controle de ponto, banco de horas e relatorios mensais.
 - A instalacao cria o atalho `Ponto Funcionarios` na Area de Trabalho.
 - O atalho abre `PontoFuncionarios.exe` direto, sem janela de CMD.
 - O instalador fecha o programa, faz backup do banco, limpa arquivos antigos e preserva os dados.
-- Versao atual: `26.08.9`.
+- Versao atual: `26.08.10`.
 - Ela usa o banco local `data/ponto_funcionarios.db`.
+- Tambem pode usar banco da empresa em PostgreSQL pelo menu `AUXILIARES > Parametros`.
 - Ao abrir, o sistema entra no menu principal com os botoes de funcionario, entrada/saida, consulta, importar ponto e sair.
 - O menu principal tambem tem o botao `Banco de Horas`, com resumo mensal no modelo da planilha de 2026.
 - O botao `Importar Ponto` abre o TXT exportado pelo relogio e grava as batidas no banco local.
@@ -25,6 +26,7 @@ Aplicacao local para controle de ponto, banco de horas e relatorios mensais.
 - Funcionarios: cadastro local com ID do relogio, departamento, jornadas e tolerancia.
 - Banco de horas: apuracao diaria editavel.
 - Relatorios: conferencia individual padronizada, com espelho mensal em PDF pronto para impressao.
+- Banco da empresa: opcao PostgreSQL central para mais de um computador editar os mesmos dados.
 
 ## Salvamento
 
@@ -33,6 +35,25 @@ Aplicacao local para controle de ponto, banco de horas e relatorios mensais.
 - O banco local fica em `%LOCALAPPDATA%\PontoFuncionarios\data\ponto_funcionarios.db`.
 - Ao reinstalar, o instalador atualiza os arquivos do programa e preserva o banco existente.
 - Para levar dados para outro computador, copie o arquivo do banco somente se quiser compartilhar os funcionarios e pontos daquele computador.
+
+## Banco da empresa PostgreSQL
+
+- Instale PostgreSQL no computador principal da empresa.
+- Crie o banco `ponto_funcionarios` e o usuario `ponto_app`.
+- No computador principal, rode como administrador:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\setup_postgres_empresa.ps1 -AppPassword "SENHA_DO_APP"
+```
+
+- No app, abra `AUXILIARES > Parametros`, selecione `Banco da empresa PostgreSQL`, informe IP/nome do PC, porta `5432`, banco `ponto_funcionarios`, usuario `ponto_app` e senha.
+- Use `Testar conexao`, depois `Migrar SQLite atual` para levar os dados locais para o PostgreSQL.
+- No computador do Victor, instale o app e configure apenas os mesmos dados de conexao.
+- Para backup diario:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\criar_tarefa_backup_postgres.ps1 -Password "SENHA_DO_APP"
+```
 
 ## Banco SQLite local
 

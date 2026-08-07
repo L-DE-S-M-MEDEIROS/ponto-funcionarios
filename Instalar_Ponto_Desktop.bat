@@ -51,8 +51,13 @@ if not exist "%INSTALL_DIR%\data\ponto_funcionarios.db" (
 
 if exist "%SOURCE_DIR%data\dados_atuais_app.json" copy /Y "%SOURCE_DIR%data\dados_atuais_app.json" "%INSTALL_DIR%\data\dados_atuais_app.json" >nul
 if exist "%SOURCE_DIR%data\dados_antigos_app.json" copy /Y "%SOURCE_DIR%data\dados_antigos_app.json" "%INSTALL_DIR%\data\dados_antigos_app.json" >nul
-if exist "%SOURCE_DIR%scripts\import_legacy_db.py" copy /Y "%SOURCE_DIR%scripts\import_legacy_db.py" "%INSTALL_DIR%\scripts\import_legacy_db.py" >nul
-if exist "%SOURCE_DIR%scripts\export_sqlite_to_app_state.py" copy /Y "%SOURCE_DIR%scripts\export_sqlite_to_app_state.py" "%INSTALL_DIR%\scripts\export_sqlite_to_app_state.py" >nul
+if exist "%SOURCE_DIR%scripts" xcopy "%SOURCE_DIR%scripts" "%INSTALL_DIR%\scripts" /E /I /Y >nul
+if exist "%SOURCE_DIR%import_legacy_db.py" copy /Y "%SOURCE_DIR%import_legacy_db.py" "%INSTALL_DIR%\scripts\import_legacy_db.py" >nul
+if exist "%SOURCE_DIR%export_sqlite_to_app_state.py" copy /Y "%SOURCE_DIR%export_sqlite_to_app_state.py" "%INSTALL_DIR%\scripts\export_sqlite_to_app_state.py" >nul
+if exist "%SOURCE_DIR%migrate_sqlite_to_postgres.py" copy /Y "%SOURCE_DIR%migrate_sqlite_to_postgres.py" "%INSTALL_DIR%\scripts\migrate_sqlite_to_postgres.py" >nul
+if exist "%SOURCE_DIR%setup_postgres_empresa.ps1" copy /Y "%SOURCE_DIR%setup_postgres_empresa.ps1" "%INSTALL_DIR%\scripts\setup_postgres_empresa.ps1" >nul
+if exist "%SOURCE_DIR%backup_postgres_diario.ps1" copy /Y "%SOURCE_DIR%backup_postgres_diario.ps1" "%INSTALL_DIR%\scripts\backup_postgres_diario.ps1" >nul
+if exist "%SOURCE_DIR%criar_tarefa_backup_postgres.ps1" copy /Y "%SOURCE_DIR%criar_tarefa_backup_postgres.ps1" "%INSTALL_DIR%\scripts\criar_tarefa_backup_postgres.ps1" >nul
 
 if exist "%INSTALL_DIR%\version.json" (
   powershell -NoProfile -ExecutionPolicy Bypass -Command "$version=(Get-Content -Raw -LiteralPath '%INSTALL_DIR%\version.json' | ConvertFrom-Json).version; Set-Content -LiteralPath '%INSTALL_DIR%\installed_version.txt' -Value $version -Encoding ASCII"

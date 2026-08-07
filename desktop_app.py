@@ -15,8 +15,20 @@ if getattr(sys, "frozen", False):
 else:
     APP_DIR = Path(__file__).resolve().parent
 DB_PATH = APP_DIR / "data" / "ponto_funcionarios.db"
-APP_VERSION = "26.08.9"
+CONFIG_PATH = APP_DIR / "config.json"
+APP_VERSION = "26.08.10"
 UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/L-DE-S-M-MEDEIROS/ponto-funcionarios/main/version.json"
+
+DEFAULT_CONFIG = {
+    "database": {
+        "mode": "local",
+        "host": "localhost",
+        "port": 5432,
+        "dbname": "ponto_funcionarios",
+        "user": "ponto_app",
+        "password": "",
+    }
+}
 
 
 MONTHS = [
@@ -35,6 +47,49 @@ MONTHS = [
 ]
 
 
+class AppConnection:
+    def __init__(self, kind, config):
+        self.kind = kind
+        if kind == "postgres":
+            try:
+                import psycopg
+                from psycopg.rows import dict_row
+            except ImportError as exc:
+                raise RuntimeError("Driver PostgreSQL não encontrado. Reinstale o sistema pela versão com suporte PostgreSQL.") from exc
+            self.raw = psycopg.connect(
+                host=config.get("host") or "localhost",
+                port=int(config.get("port") or 5432),
+                dbname=config.get("dbname") or "ponto_funcionarios",
+                user=config.get("user") or "ponto_app",
+                password=config.get("password") or "",
+                row_factory=dict_row,
+            )
+        else:
+            DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+            self.raw = sqlite3.connect(config.get("path") or DB_PATH)
+            self.raw.row_factory = sqlite3.Row
+
+    def execute(self, sql, params=None):
+        params = params or ()
+        if self.kind == "postgres":
+            sql = sql.replace("?", "%s")
+        return self.raw.execute(sql, params)
+
+    def executemany(self, sql, params):
+        if self.kind == "postgres":
+            sql = sql.replace("?", "%s")
+        return self.raw.executemany(sql, params)
+
+    def commit(self):
+        self.raw.commit()
+
+    def rollback(self):
+        self.raw.rollback()
+
+    def close(self):
+        self.raw.close()
+
+
 class PontoDesktop(tk.Tk):
     def __init__(self):
         super().__init__()
@@ -44,14 +99,86 @@ class PontoDesktop(tk.Tk):
         self.configure(bg="#eeeeee")
         self.selected_entry_id = None
 
-        DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-        self.conn = sqlite3.connect(DB_PATH)
-        self.conn.row_factory = sqlite3.Row
+        self.app_config = load_app_config()
+        self.conn = self.open_database()
         self.ensure_schema()
         self.create_menu()
         self.show_home()
 
+    def open_database(self):
+        db_config = self.app_config.get("database", {})
+        if db_config.get("mode") == "postgres":
+            try:
+                return AppConnection("postgres", db_config)
+            except Exception as exc:
+                messagebox.showerror(
+                    "Banco da Empresa",
+                    f"Não foi possível conectar ao PostgreSQL.\n\n{exc}\n\nO sistema será aberto no banco local.",
+                )
+                self.app_config["database"]["mode"] = "local"
+        return AppConnection("local", {"path": DB_PATH})
+
+    def reconnect_database(self):
+        try:
+            self.conn.close()
+        except Exception:
+            pass
+        self.conn = self.open_database()
+        self.ensure_schema()
+
     def ensure_schema(self):
+        if getattr(self.conn, "kind", "local") == "postgres":
+            self.conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS employees (
+                  id SERIAL PRIMARY KEY,
+                  clock_id TEXT,
+                  name TEXT,
+                  department TEXT,
+                  active TEXT,
+                  cpf TEXT,
+                  pis TEXT,
+                  role TEXT,
+                  weekday_hours TEXT,
+                  saturday_hours TEXT,
+                  sunday_hours TEXT,
+                  tolerance_minutes INTEGER
+                )
+                """
+            )
+            self.conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS time_entries (
+                  id SERIAL PRIMARY KEY,
+                  employee_id INTEGER,
+                  work_date TEXT,
+                  day INTEGER,
+                  month INTEGER,
+                  year INTEGER,
+                  entrada1 TEXT,
+                  saida1 TEXT,
+                  entrada2 TEXT,
+                  saida2 TEXT,
+                  entrada3 TEXT,
+                  saida3 TEXT,
+                  entrada4 TEXT,
+                  saida4 TEXT,
+                  expected_hours TEXT,
+                  worked_hours TEXT,
+                  credit_hours TEXT,
+                  debit_hours TEXT,
+                  credit_decimal REAL,
+                  debit_decimal REAL,
+                  extra_night_decimal REAL,
+                  absence TEXT,
+                  note TEXT,
+                  legacy_id TEXT
+                )
+                """
+            )
+            self.conn.commit()
+            return
+
         self.conn.execute(
             """
             CREATE TABLE IF NOT EXISTS employees (
@@ -1309,10 +1436,109 @@ class PontoDesktop(tk.Tk):
         tk.Button(frame, text="Voltar", command=self.show_home).pack(anchor="e")
 
     def show_departments(self):
-        departments = [row[0] for row in self.conn.execute("SELECT DISTINCT department FROM employees WHERE department IS NOT NULL AND department <> '' ORDER BY department")]
+        departments = [row["department"] for row in self.conn.execute("SELECT DISTINCT department FROM employees WHERE department IS NOT NULL AND department <> '' ORDER BY department")]
         messagebox.showinfo("Departamento", "\n".join(departments) or "Nenhum departamento cadastrado.")
 
     def show_parameters(self):
+        window = tk.Toplevel(self)
+        window.title("Parâmetros")
+        window.geometry("560x420")
+        window.configure(bg="#eeeeee")
+        window.transient(self)
+        window.columnconfigure(0, weight=1)
+
+        db_config = self.app_config.get("database", {})
+        mode_var = tk.StringVar(value=db_config.get("mode", "local"))
+        host_var = tk.StringVar(value=db_config.get("host", "localhost"))
+        port_var = tk.StringVar(value=str(db_config.get("port", 5432)))
+        dbname_var = tk.StringVar(value=db_config.get("dbname", "ponto_funcionarios"))
+        user_var = tk.StringVar(value=db_config.get("user", "ponto_app"))
+        password_var = tk.StringVar(value=db_config.get("password", ""))
+
+        tk.Label(window, text="Banco de Dados", bg="#eeeeee", fg="#555555", font=("Arial", 22, "bold")).grid(row=0, column=0, sticky="w", padx=14, pady=(14, 6))
+
+        mode_frame = tk.LabelFrame(window, text="Modo de uso", bg="#eeeeee", font=("Arial", 10, "bold"))
+        mode_frame.grid(row=1, column=0, sticky="ew", padx=14, pady=6)
+        tk.Radiobutton(mode_frame, text=f"Banco local SQLite ({DB_PATH})", variable=mode_var, value="local", bg="#eeeeee").pack(anchor="w", padx=8, pady=3)
+        tk.Radiobutton(mode_frame, text="Banco da empresa PostgreSQL", variable=mode_var, value="postgres", bg="#eeeeee").pack(anchor="w", padx=8, pady=3)
+
+        form = tk.LabelFrame(window, text="PostgreSQL", bg="#eeeeee", font=("Arial", 10, "bold"))
+        form.grid(row=2, column=0, sticky="ew", padx=14, pady=6)
+        form.columnconfigure(1, weight=1)
+        fields = [
+            ("IP / nome do PC", host_var, False),
+            ("Porta", port_var, False),
+            ("Banco", dbname_var, False),
+            ("Usuário", user_var, False),
+            ("Senha", password_var, True),
+        ]
+        for index, (label, variable, secret) in enumerate(fields):
+            tk.Label(form, text=label, bg="#eeeeee", font=("Arial", 9, "bold")).grid(row=index, column=0, sticky="w", padx=8, pady=3)
+            tk.Entry(form, textvariable=variable, show="*" if secret else "", width=34).grid(row=index, column=1, sticky="ew", padx=8, pady=3)
+
+        status_var = tk.StringVar(value=f"Conexão atual: {self.database_label()}")
+        tk.Label(window, textvariable=status_var, bg="#eeeeee", fg="#333333", font=("Arial", 10, "bold")).grid(row=3, column=0, sticky="w", padx=14, pady=(8, 0))
+
+        buttons = tk.Frame(window, bg="#eeeeee")
+        buttons.grid(row=4, column=0, sticky="ew", padx=14, pady=14)
+
+        def build_config():
+            try:
+                return postgres_config_from_values(mode_var.get(), host_var.get(), port_var.get(), dbname_var.get(), user_var.get(), password_var.get())
+            except ValueError:
+                messagebox.showwarning("Parâmetros", "Informe uma porta válida.")
+                return None
+
+        def test_connection():
+            config = build_config()
+            if not config:
+                return
+            try:
+                conn = AppConnection(config["database"]["mode"], config["database"] if config["database"]["mode"] == "postgres" else {"path": DB_PATH})
+                conn.execute("SELECT 1").fetchone()
+                conn.close()
+                messagebox.showinfo("Parâmetros", "Conexão testada com sucesso.")
+            except Exception as exc:
+                messagebox.showerror("Parâmetros", f"Falha ao conectar.\n\n{exc}")
+
+        def save_config():
+            config = build_config()
+            if not config:
+                return
+            self.app_config = config
+            save_app_config(self.app_config)
+            self.reconnect_database()
+            status_var.set(f"Conexão atual: {self.database_label()}")
+            messagebox.showinfo("Parâmetros", "Configuração salva. O sistema já está usando o banco selecionado.")
+
+        def migrate_current_sqlite():
+            config = build_config()
+            if not config or config["database"]["mode"] != "postgres":
+                messagebox.showwarning("Migrar", "Selecione PostgreSQL para migrar.")
+                return
+            if not DB_PATH.exists():
+                messagebox.showwarning("Migrar", f"Banco SQLite não encontrado:\n{DB_PATH}")
+                return
+            if not messagebox.askyesno("Migrar", "Migrar os funcionários e pontos do SQLite local para o PostgreSQL?\n\nA migração atualiza registros com o mesmo código."):
+                return
+            try:
+                result = migrate_sqlite_to_postgres(DB_PATH, config["database"])
+                messagebox.showinfo("Migrar", f"Migração concluída.\n\nFuncionários: {result['employees']}\nPontos: {result['entries']}")
+            except Exception as exc:
+                messagebox.showerror("Migrar", f"Não foi possível migrar.\n\n{exc}")
+
+        tk.Button(buttons, text="Testar conexão", width=16, command=test_connection).pack(side="left", padx=(0, 6))
+        tk.Button(buttons, text="Migrar SQLite atual", width=18, command=migrate_current_sqlite).pack(side="left", padx=6)
+        tk.Button(buttons, text="Salvar e usar", width=14, command=save_config).pack(side="right")
+        tk.Button(buttons, text="Fechar", width=10, command=window.destroy).pack(side="right", padx=6)
+
+    def database_label(self):
+        if getattr(self.conn, "kind", "local") == "postgres":
+            db_config = self.app_config.get("database", {})
+            return f"PostgreSQL {db_config.get('host')}:{db_config.get('port')}/{db_config.get('dbname')}"
+        return f"SQLite local {DB_PATH}"
+
+    def show_parameters_old(self):
         messagebox.showinfo("Parâmetros", f"Banco local:\n{DB_PATH}")
 
     def show_report(self):
@@ -1388,6 +1614,198 @@ class PontoDesktop(tk.Tk):
 def hhmm(value):
     normalized = normalize_time(value)
     return normalized or ""
+
+
+def load_app_config():
+    config = json.loads(json.dumps(DEFAULT_CONFIG))
+    if CONFIG_PATH.exists():
+        try:
+            saved = json.loads(CONFIG_PATH.read_text(encoding="utf-8-sig"))
+            config["database"].update(saved.get("database", {}))
+        except Exception:
+            pass
+    return config
+
+
+def save_app_config(config):
+    CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    CONFIG_PATH.write_text(json.dumps(config, indent=2, ensure_ascii=False), encoding="utf-8")
+
+
+def postgres_config_from_values(mode, host, port, dbname, user, password):
+    return {
+        "database": {
+            "mode": mode,
+            "host": host.strip() or "localhost",
+            "port": int(port or 5432),
+            "dbname": dbname.strip() or "ponto_funcionarios",
+            "user": user.strip() or "ponto_app",
+            "password": password,
+        }
+    }
+
+
+def migrate_sqlite_to_postgres(sqlite_path, pg_config):
+    sqlite_conn = sqlite3.connect(sqlite_path)
+    sqlite_conn.row_factory = sqlite3.Row
+    pg_conn = AppConnection("postgres", pg_config)
+    try:
+        if getattr(pg_conn, "raw", None):
+            pg_conn.raw.autocommit = False
+
+        pg_conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS employees (
+              id SERIAL PRIMARY KEY,
+              clock_id TEXT,
+              name TEXT,
+              department TEXT,
+              active TEXT,
+              cpf TEXT,
+              pis TEXT,
+              role TEXT,
+              weekday_hours TEXT,
+              saturday_hours TEXT,
+              sunday_hours TEXT,
+              tolerance_minutes INTEGER
+            )
+            """
+        )
+        pg_conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS time_entries (
+              id SERIAL PRIMARY KEY,
+              employee_id INTEGER,
+              work_date TEXT,
+              day INTEGER,
+              month INTEGER,
+              year INTEGER,
+              entrada1 TEXT,
+              saida1 TEXT,
+              entrada2 TEXT,
+              saida2 TEXT,
+              entrada3 TEXT,
+              saida3 TEXT,
+              entrada4 TEXT,
+              saida4 TEXT,
+              expected_hours TEXT,
+              worked_hours TEXT,
+              credit_hours TEXT,
+              debit_hours TEXT,
+              credit_decimal REAL,
+              debit_decimal REAL,
+              extra_night_decimal REAL,
+              absence TEXT,
+              note TEXT,
+              legacy_id TEXT
+            )
+            """
+        )
+
+        employee_rows = sqlite_conn.execute("SELECT * FROM employees ORDER BY id").fetchall()
+        entry_rows = sqlite_conn.execute("SELECT * FROM time_entries ORDER BY id").fetchall()
+
+        employee_columns = [
+            "id",
+            "clock_id",
+            "name",
+            "department",
+            "active",
+            "cpf",
+            "pis",
+            "role",
+            "weekday_hours",
+            "saturday_hours",
+            "sunday_hours",
+            "tolerance_minutes",
+        ]
+        entry_columns = [
+            "id",
+            "employee_id",
+            "work_date",
+            "day",
+            "month",
+            "year",
+            "entrada1",
+            "saida1",
+            "entrada2",
+            "saida2",
+            "entrada3",
+            "saida3",
+            "entrada4",
+            "saida4",
+            "expected_hours",
+            "worked_hours",
+            "credit_hours",
+            "debit_hours",
+            "credit_decimal",
+            "debit_decimal",
+            "extra_night_decimal",
+            "absence",
+            "note",
+            "legacy_id",
+        ]
+
+        employee_insert = f"""
+            INSERT INTO employees ({', '.join(employee_columns)})
+            VALUES ({', '.join(['?'] * len(employee_columns))})
+            ON CONFLICT (id) DO UPDATE SET
+              clock_id=EXCLUDED.clock_id,
+              name=EXCLUDED.name,
+              department=EXCLUDED.department,
+              active=EXCLUDED.active,
+              cpf=EXCLUDED.cpf,
+              pis=EXCLUDED.pis,
+              role=EXCLUDED.role,
+              weekday_hours=EXCLUDED.weekday_hours,
+              saturday_hours=EXCLUDED.saturday_hours,
+              sunday_hours=EXCLUDED.sunday_hours,
+              tolerance_minutes=EXCLUDED.tolerance_minutes
+        """
+        entry_insert = f"""
+            INSERT INTO time_entries ({', '.join(entry_columns)})
+            VALUES ({', '.join(['?'] * len(entry_columns))})
+            ON CONFLICT (id) DO UPDATE SET
+              employee_id=EXCLUDED.employee_id,
+              work_date=EXCLUDED.work_date,
+              day=EXCLUDED.day,
+              month=EXCLUDED.month,
+              year=EXCLUDED.year,
+              entrada1=EXCLUDED.entrada1,
+              saida1=EXCLUDED.saida1,
+              entrada2=EXCLUDED.entrada2,
+              saida2=EXCLUDED.saida2,
+              entrada3=EXCLUDED.entrada3,
+              saida3=EXCLUDED.saida3,
+              entrada4=EXCLUDED.entrada4,
+              saida4=EXCLUDED.saida4,
+              expected_hours=EXCLUDED.expected_hours,
+              worked_hours=EXCLUDED.worked_hours,
+              credit_hours=EXCLUDED.credit_hours,
+              debit_hours=EXCLUDED.debit_hours,
+              credit_decimal=EXCLUDED.credit_decimal,
+              debit_decimal=EXCLUDED.debit_decimal,
+              extra_night_decimal=EXCLUDED.extra_night_decimal,
+              absence=EXCLUDED.absence,
+              note=EXCLUDED.note,
+              legacy_id=EXCLUDED.legacy_id
+        """
+
+        for row in employee_rows:
+            pg_conn.execute(employee_insert, tuple(row[column] for column in employee_columns))
+        for row in entry_rows:
+            pg_conn.execute(entry_insert, tuple(row[column] for column in entry_columns))
+
+        pg_conn.execute("SELECT setval(pg_get_serial_sequence('employees','id'), COALESCE((SELECT MAX(id) FROM employees), 1), true)")
+        pg_conn.execute("SELECT setval(pg_get_serial_sequence('time_entries','id'), COALESCE((SELECT MAX(id) FROM time_entries), 1), true)")
+        pg_conn.commit()
+        return {"employees": len(employee_rows), "entries": len(entry_rows)}
+    except Exception:
+        pg_conn.rollback()
+        raise
+    finally:
+        sqlite_conn.close()
+        pg_conn.close()
 
 
 def version_tuple(value):
