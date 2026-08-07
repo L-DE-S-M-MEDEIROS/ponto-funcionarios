@@ -1,11 +1,11 @@
 ﻿{
-    "version":  "26.08.7",
+    "version":  "26.08.8",
     "author":  "L DE S M MEDEIROS",
     "type":  "installer",
-    "url":  "https://github.com/L-DE-S-M-MEDEIROS/ponto-funcionarios/releases/download/v26.08.7/Instalador.Ponto.Funcionarios.exe",
-    "sha256":  "9591d6e8bc0ce98d53be8e9a57fca9289049f73e9b068b7a4e9127f4ad7f3e93",
-    "title":  "Versao 26.08.7",
-    "description":  "Corrige a consulta de atualizacoes para aceitar manifesto JSON com UTF-8 BOM.",
+    "url":  "https://github.com/L-DE-S-M-MEDEIROS/ponto-funcionarios/releases/download/v26.08.8/Instalador.Ponto.Funcionarios.exe",
+    "sha256":  "ec47acaadaf781dd67888db0c1017e15523b28c82a432e70313e51b2914362de",
+    "title":  "Versao 26.08.8",
+    "description":  "Melhora o instalador: fecha o app, faz backup do banco, limpa arquivos antigos e preserva os dados locais.",
     "publishedAt":  "2026-08-07",
     "critical":  false
 }
