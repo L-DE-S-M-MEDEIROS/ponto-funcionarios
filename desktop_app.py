@@ -1,4 +1,4 @@
-import sqlite3
+﻿import sqlite3
 import json
 import os
 import sys
@@ -16,7 +16,7 @@ else:
     APP_DIR = Path(__file__).resolve().parent
 DB_PATH = APP_DIR / "data" / "ponto_funcionarios.db"
 CONFIG_PATH = APP_DIR / "config.json"
-APP_VERSION = "26.08.13"
+APP_VERSION = "26.08.14"
 UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/L-DE-S-M-MEDEIROS/ponto-funcionarios/main/version.json"
 
 DEFAULT_CONFIG = {
@@ -551,27 +551,49 @@ class PontoDesktop(tk.Tk):
             "note": tk.StringVar(),
         }
 
-        edit = tk.LabelFrame(root, bg="#eeeeee")
-        edit.grid(row=2, column=0, columnspan=7, sticky="ew")
-        for col in range(12):
-            edit.columnconfigure(col, weight=1)
+        edit = tk.LabelFrame(root, text="Editar dia selecionado", bg="#f3f6f8", fg="#1f2933", font=("Arial", 11, "bold"), padx=8, pady=8)
+        edit.grid(row=2, column=0, columnspan=7, sticky="ew", pady=(6, 2))
+        edit.columnconfigure(0, weight=1)
+        edit.columnconfigure(1, weight=1)
+        edit.columnconfigure(2, weight=1)
 
-        self.small_field(edit, "Dia", "day", 0, 0, 7)
-        self.small_field(edit, "Semana", "week", 0, 1, 8)
-        tk.Checkbutton(edit, text="Falta", variable=self.field_vars["absence"], bg="#eeeeee").grid(row=0, column=2, sticky="w")
-        tk.Checkbutton(edit, text="Feriado", variable=self.field_vars["holiday"], bg="#eeeeee").grid(row=0, column=3, sticky="w")
-        self.small_field(edit, "Horas Dia", "expected", 0, 5, 9, bg="#fff8b8")
-        self.small_field(edit, "Horas Trabalhada", "worked", 0, 6, 14)
-        self.small_field(edit, "Crédito", "credit", 0, 7, 8, bg="#b7ffb7")
-        self.small_field(edit, "Débito", "debit", 0, 8, 8, bg="#ff3a3a")
-        self.small_field(edit, "Adicional", "night", 0, 9, 8, bg="#bffafa")
+        day_box = tk.LabelFrame(edit, text="Dia", bg="#ffffff", fg="#1f2933", font=("Arial", 10, "bold"), padx=8, pady=8)
+        day_box.grid(row=0, column=0, sticky="nsew", padx=(0, 6))
+        for col in range(2):
+            day_box.columnconfigure(col, weight=1)
+        self.small_field(day_box, "Dia do mes", "day", 0, 0, 10, bg="#fff8b8")
+        self.small_field(day_box, "Semana", "week", 0, 1, 12)
 
-        punches = [("Entrada", "entrada1"), ("Saída", "saida1"), ("Entrada", "entrada2"), ("Saída", "saida2"), ("Entrada", "entrada3"), ("Saída", "saida3"), ("Entrada", "entrada4"), ("Saída", "saida4")]
+        occurrence_box = tk.LabelFrame(edit, text="Ocorrencias do dia", bg="#ffffff", fg="#1f2933", font=("Arial", 10, "bold"), padx=8, pady=8)
+        occurrence_box.grid(row=0, column=1, sticky="nsew", padx=6)
+        tk.Checkbutton(occurrence_box, text="Falta", variable=self.field_vars["absence"], bg="#ffffff", font=("Arial", 10, "bold")).grid(row=0, column=0, sticky="w", padx=2, pady=3)
+        tk.Checkbutton(occurrence_box, text="Feriado", variable=self.field_vars["holiday"], bg="#ffffff", font=("Arial", 10, "bold")).grid(row=0, column=1, sticky="w", padx=10, pady=3)
+        tk.Label(occurrence_box, text="Observacao", bg="#ffffff", font=("Arial", 9, "bold")).grid(row=1, column=0, columnspan=2, sticky="w", padx=2, pady=(8, 2))
+        tk.Entry(occurrence_box, textvariable=self.field_vars["note"], width=34).grid(row=2, column=0, columnspan=2, sticky="ew", padx=2, pady=2)
+        occurrence_box.columnconfigure(1, weight=1)
+
+        totals_box = tk.LabelFrame(edit, text="Totais calculados", bg="#ffffff", fg="#1f2933", font=("Arial", 10, "bold"), padx=8, pady=8)
+        totals_box.grid(row=0, column=2, sticky="nsew", padx=(6, 0))
+        for col in range(5):
+            totals_box.columnconfigure(col, weight=1)
+        self.small_field(totals_box, "Horas dia", "expected", 0, 0, 9, bg="#fff8b8")
+        self.small_field(totals_box, "Trabalhada", "worked", 0, 1, 11, bg="#e8f7ff")
+        self.small_field(totals_box, "Credito", "credit", 0, 2, 9, bg="#d9fbe1")
+        self.small_field(totals_box, "Debito", "debit", 0, 3, 9, bg="#ffd6d6")
+        self.small_field(totals_box, "Adicional", "night", 0, 4, 9, bg="#d8fbff")
+
+        punches_box = tk.LabelFrame(edit, text="Horarios / batidas", bg="#ffffff", fg="#1f2933", font=("Arial", 10, "bold"), padx=8, pady=8)
+        punches_box.grid(row=1, column=0, columnspan=3, sticky="ew", pady=(8, 0))
+        for col in range(8):
+            punches_box.columnconfigure(col, weight=1)
+        punches = [
+            ("Entrada 1", "entrada1"), ("Saida 1", "saida1"),
+            ("Entrada 2", "entrada2"), ("Saida 2", "saida2"),
+            ("Entrada 3", "entrada3"), ("Saida 3", "saida3"),
+            ("Entrada 4", "entrada4"), ("Saida 4", "saida4"),
+        ]
         for idx, (label, key) in enumerate(punches):
-            self.small_field(edit, label, key, 2, idx, 10)
-
-        tk.Label(edit, text="Obs", bg="#eeeeee", font=("Arial", 9, "bold")).grid(row=4, column=0, sticky="w")
-        tk.Entry(edit, textvariable=self.field_vars["note"]).grid(row=5, column=0, columnspan=10, sticky="ew", padx=4, pady=2)
+            self.small_field(punches_box, label, key, 0, idx, 12)
 
         side = tk.LabelFrame(root, text="Relatórios e consultas", bg="#f3f6f8", fg="#1f2933", font=("Arial", 10, "bold"))
         side.grid(row=1, column=7, rowspan=3, sticky="ns", padx=8)
@@ -581,6 +603,8 @@ class PontoDesktop(tk.Tk):
         tk.Button(side, text="Conferir período", width=24, command=self.load_entries).pack(pady=(24, 4), padx=8)
         tk.Button(side, text="Funcionários presentes", width=24, command=self.not_ready).pack(pady=4, padx=8)
         tk.Button(side, text="Funcionários faltantes", width=24, command=self.not_ready).pack(pady=4, padx=8)
+
+        tk.Label(root, text="Clique em uma linha da tabela para editar. Depois altere Dia, Ocorrencias ou Horarios acima e clique em Gravar alteracoes.", bg="#f3f6f8", fg="#334155", font=("Arial", 10, "bold")).grid(row=3, column=0, columnspan=7, sticky="w", pady=(6, 0))
 
         columns = ("day", "entrada1", "saida1", "entrada2", "saida2", "entrada3", "saida3", "entrada4", "saida4", "expected", "worked", "note", "credit", "debit", "night", "store")
         self.tree = ttk.Treeview(root, columns=columns, show="headings", height=12)
@@ -596,11 +620,11 @@ class PontoDesktop(tk.Tk):
 
         bottom = tk.Frame(root, bg="#eeeeee")
         bottom.grid(row=5, column=0, columnspan=8, sticky="ew", pady=4)
-        tk.Button(bottom, text="💾\nGravar(F1)", width=12, height=3, command=self.save_entry).pack(side="left")
-        tk.Button(bottom, text="➕\nIncluir(F2)", width=12, height=3, command=self.clear_form).pack(side="left")
-        tk.Button(bottom, text="❌\nCancelar(F3)", width=12, height=3, command=self.clear_form).pack(side="left")
-        tk.Button(bottom, text="🗑\nExcluir", width=12, height=3, command=self.delete_entry).pack(side="left")
-        tk.Button(bottom, text="❌\nSair(F5)", width=12, height=3, command=self.show_home).pack(side="right")
+        tk.Button(bottom, text="Gravar alteracoes (F1)", width=20, height=2, command=self.save_entry).pack(side="left", padx=3)
+        tk.Button(bottom, text="Novo lancamento (F2)", width=20, height=2, command=self.clear_form).pack(side="left", padx=3)
+        tk.Button(bottom, text="Limpar edicao (F3)", width=18, height=2, command=self.clear_form).pack(side="left", padx=3)
+        tk.Button(bottom, text="Excluir dia", width=14, height=2, command=self.delete_entry).pack(side="left", padx=3)
+        tk.Button(bottom, text="Voltar ao menu (F5)", width=18, height=2, command=self.show_home).pack(side="right", padx=3)
 
         self.bind("<F1>", lambda _event: self.save_entry())
         self.bind("<F2>", lambda _event: self.clear_form())
@@ -623,8 +647,9 @@ class PontoDesktop(tk.Tk):
         tk.Entry(parent, textvariable=variable, width=width, bg="#fff8b8" if yellow else "white").grid(row=1, column=col, sticky="ew", padx=4, pady=3)
 
     def small_field(self, parent, label, key, row, col, width, bg="white"):
-        tk.Label(parent, text=label, bg="#eeeeee", font=("Arial", 9, "bold")).grid(row=row, column=col, sticky="w", padx=2)
-        tk.Entry(parent, textvariable=self.field_vars[key], width=width, bg=bg).grid(row=row + 1, column=col, sticky="ew", padx=2, pady=2)
+        bg_parent = parent.cget("bg") if "bg" in parent.keys() else "#eeeeee"
+        tk.Label(parent, text=label, bg=bg_parent, font=("Arial", 9, "bold")).grid(row=row, column=col, sticky="w", padx=2)
+        tk.Entry(parent, textvariable=self.field_vars[key], width=width, bg=bg, font=("Arial", 10)).grid(row=row + 1, column=col, sticky="ew", padx=2, pady=2)
 
     def employee_options(self):
         rows = self.conn.execute("SELECT id, name FROM employees ORDER BY name").fetchall()
@@ -2293,3 +2318,4 @@ if __name__ == "__main__":
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     app = PontoDesktop()
     app.mainloop()
+

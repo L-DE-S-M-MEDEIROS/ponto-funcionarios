@@ -1,11 +1,11 @@
 ﻿{
-    "version":  "26.08.13",
+    "version":  "26.08.14",
     "author":  "L DE S M MEDEIROS",
     "type":  "installer",
-    "url":  "https://github.com/L-DE-S-M-MEDEIROS/ponto-funcionarios/releases/download/v26.08.13/Instalador.Ponto.Funcionarios.exe",
-    "sha256":  "54741bdb77869a945b12fab86e99a1433625b5a39fb0e2b401cb586975692ad8",
-    "title":  "Versao 26.08.13",
-    "description":  "Melhora a interface inicial e organiza menus por Cadastros, Ponto, Relatorios e Sistema.",
+    "url":  "https://github.com/L-DE-S-M-MEDEIROS/ponto-funcionarios/releases/download/v26.08.14/Instalador.Ponto.Funcionarios.exe",
+    "sha256":  "d1760ec063bbccf5087c7a3edd3939d665cc226535d53c2205f27f9492b271c4",
+    "title":  "Versao 26.08.14",
+    "description":  "Melhora a tela de edicao de horarios e ocorrencias, separando Dia, Ocorrencias, Horarios e Totais.",
     "publishedAt":  "2026-08-07",
     "critical":  false
 }
