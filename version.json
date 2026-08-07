@@ -3,9 +3,9 @@
     "author":  "L DE S M MEDEIROS",
     "type":  "installer",
     "url":  "https://github.com/L-DE-S-M-MEDEIROS/ponto-funcionarios/releases/download/v26.8/Instalador.Ponto.Funcionarios.exe",
-    "sha256":  "cc92d00da6c945804be4215c0013ceb4617864bdd2aa778a3557310951785a5e",
-    "title":  "Versao desktop inicial com banco local",
-    "description":  "Programa desktop para controle de ponto com SQLite local, tela de inclusao manual, dados atuais importados e instalador que preserva o banco existente.",
-    "publishedAt":  "2026-08-06",
+    "sha256":  "a08818c34459e08cd84df27feec1351d4b21235289d7ad2a7b0e4ea715b6a160",
+    "title":  "Interface inicial revisada",
+    "description":  "Tela inicial mais limpa, sem telefone no rodape, mantendo o programa desktop com SQLite local e instalador que preserva o banco existente.",
+    "publishedAt":  "2026-08-07",
     "critical":  false
 }

@@ -142,31 +142,58 @@ class PontoDesktop(tk.Tk):
 
     def show_login(self):
         self.clear()
-        frame = tk.Frame(self, bg="white", highlightbackground="#888888", highlightthickness=1)
-        frame.place(relx=0.5, rely=0.5, anchor="center", width=645, height=350)
+        background = tk.Frame(self, bg="#e7eaed")
+        background.pack(fill="both", expand=True)
 
-        header = tk.Frame(frame, bg="#0a6d83", height=58)
+        frame = tk.Frame(background, bg="white", highlightbackground="#9aa3aa", highlightthickness=1)
+        frame.place(relx=0.5, rely=0.48, anchor="center", width=680, height=390)
+
+        header = tk.Frame(frame, bg="#0b7285", height=74)
         header.pack(fill="x")
-        tk.Label(header, text="SISTEMA", bg="#0a6d83", fg="#ff7a00", font=("Arial Black", 26)).pack(side="right", padx=45)
+        header.pack_propagate(False)
+        tk.Label(header, text="PONTO", bg="#0b7285", fg="white", font=("Arial Black", 25)).pack(side="left", padx=(26, 4))
+        tk.Label(header, text="FUNCIONÁRIOS", bg="#0b7285", fg="#ff7a00", font=("Arial Black", 25)).pack(side="left")
+        tk.Label(header, text=f"Versão {APP_VERSION}", bg="#0b7285", fg="#d9f5f8", font=("Arial", 10, "bold")).pack(side="right", padx=24)
 
-        tk.Label(frame, text="🔑", bg="white", fg="#d49b00", font=("Arial", 34)).place(x=300, y=90)
-        tk.Label(frame, text=f"Versão: {APP_VERSION}", bg="white", fg="black", font=("Arial", 10, "bold")).place(x=355, y=88)
+        body = tk.Frame(frame, bg="white")
+        body.pack(fill="both", expand=True)
+
+        left = tk.Frame(body, bg="white")
+        left.place(x=42, y=38, width=275, height=215)
+        tk.Label(left, text="Sistema local de controle de ponto", bg="white", fg="#263238", font=("Arial", 14, "bold")).pack(anchor="w")
+        tk.Label(left, text="Banco de horas, conferência e inclusão manual", bg="white", fg="#65737a", font=("Arial", 10)).pack(anchor="w", pady=(8, 20))
+
+        key_canvas = tk.Canvas(left, width=88, height=70, bg="white", highlightthickness=0)
+        key_canvas.pack(anchor="w", pady=(4, 0))
+        key_canvas.create_oval(8, 15, 38, 45, outline="#d99a00", width=4)
+        key_canvas.create_line(34, 38, 75, 62, fill="#d99a00", width=4)
+        key_canvas.create_line(58, 52, 58, 66, fill="#d99a00", width=3)
+        key_canvas.create_line(68, 57, 68, 70, fill="#d99a00", width=3)
+
+        form = tk.Frame(body, bg="white")
+        form.place(x=360, y=42, width=250, height=225)
 
         self.login_user = tk.StringVar()
         self.login_password = tk.StringVar()
-        tk.Entry(frame, textvariable=self.login_user, bg="#ffffb8", width=18).place(x=515, y=88, height=32)
-        user_combo = ttk.Combobox(frame, values=["ADMIN"], width=18)
-        user_combo.place(x=410, y=135, height=24)
+
+        tk.Label(form, text="Usuário", bg="white", fg="#263238", font=("Arial", 9, "bold")).pack(anchor="w")
+        user_combo = ttk.Combobox(form, values=["ADMIN"], width=24)
+        user_combo.pack(fill="x", pady=(4, 12), ipady=2)
         user_combo.set("ADMIN")
-        tk.Entry(frame, textvariable=self.login_password, bg="#ffffb8", show="*", width=22).place(x=410, y=162, height=26)
-        tk.Entry(frame, bg="#ffffb8", width=22).place(x=410, y=194, height=26)
 
-        footer = tk.Frame(frame, bg="#2b2b2b", height=38)
+        tk.Label(form, text="Senha", bg="white", fg="#263238", font=("Arial", 9, "bold")).pack(anchor="w")
+        tk.Entry(form, textvariable=self.login_password, bg="#fffbc2", show="*", width=28).pack(fill="x", pady=(4, 12), ipady=4)
+
+        tk.Label(form, text="Empresa", bg="white", fg="#263238", font=("Arial", 9, "bold")).pack(anchor="w")
+        tk.Entry(form, textvariable=self.login_user, bg="#fffbc2", width=28).pack(fill="x", pady=(4, 18), ipady=4)
+
+        tk.Button(form, text="Entrar", command=self.show_manual_point, width=16, height=2).pack(anchor="e")
+
+        tk.Frame(frame, bg="#00a9d6", height=7).pack(side="bottom", fill="x")
+        footer = tk.Frame(frame, bg="#2b2b2b", height=34)
         footer.pack(side="bottom", fill="x")
-        tk.Frame(frame, bg="#00a9d6", height=8).pack(side="bottom", fill="x")
-        tk.Label(footer, text="Suporte pelo Whatsapp (11)99607-5649", bg="#2b2b2b", fg="white", font=("Arial", 9, "bold")).pack(side="right", padx=40)
-
-        tk.Button(frame, text="Entrar", command=self.show_manual_point, width=12).place(x=515, y=235)
+        footer.pack_propagate(False)
+        tk.Label(footer, text="BOLSAS BABY  |  Controle de ponto local", bg="#2b2b2b", fg="white", font=("Arial", 9, "bold")).pack(side="right", padx=24)
 
     def show_manual_point(self):
         self.clear()
