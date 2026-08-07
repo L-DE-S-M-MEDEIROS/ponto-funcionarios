@@ -1,6 +1,7 @@
 __pycache__/
 *.pyc
 *.error.txt
+*.spec
 build/
 dist/
 release/

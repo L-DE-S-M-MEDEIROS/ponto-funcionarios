@@ -1,13 +1,21 @@
 import sqlite3
+import json
+import sys
 import tkinter as tk
+import urllib.request
+import webbrowser
 from datetime import date, datetime
 from pathlib import Path
 from tkinter import messagebox, ttk
 
 
-APP_DIR = Path(__file__).resolve().parent
+if getattr(sys, "frozen", False):
+    APP_DIR = Path(sys.executable).resolve().parent
+else:
+    APP_DIR = Path(__file__).resolve().parent
 DB_PATH = APP_DIR / "data" / "ponto_funcionarios.db"
 APP_VERSION = "26.8"
+UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/L-DE-S-M-MEDEIROS/ponto-funcionarios/main/version.json"
 
 
 MONTHS = [
@@ -35,6 +43,7 @@ class PontoDesktop(tk.Tk):
         self.configure(bg="#eeeeee")
         self.selected_entry_id = None
 
+        DB_PATH.parent.mkdir(parents=True, exist_ok=True)
         self.conn = sqlite3.connect(DB_PATH)
         self.conn.row_factory = sqlite3.Row
         self.ensure_schema()
@@ -123,6 +132,7 @@ class PontoDesktop(tk.Tk):
         auxiliares.add_command(label="Parâmetros", command=self.show_parameters)
         auxiliares.add_command(label="Manutenção", command=self.not_ready)
         auxiliares.add_command(label="Eventos do Sistema", command=self.not_ready)
+        auxiliares.add_command(label="Buscar Atualizações", command=self.check_updates)
         auxiliares.add_command(label="Cópia Segurança", command=self.backup_info)
         auxiliares.add_separator()
         auxiliares.add_command(label="Ponto Automatico Criar Atalho em Desktop", command=self.not_ready)
@@ -638,6 +648,41 @@ class PontoDesktop(tk.Tk):
     def backup_info(self):
         messagebox.showinfo("Cópia Segurança", f"Faça cópia deste arquivo:\n{DB_PATH}")
 
+    def check_updates(self):
+        try:
+            with urllib.request.urlopen(UPDATE_MANIFEST_URL, timeout=12) as response:
+                manifest = json.loads(response.read().decode("utf-8"))
+        except Exception as exc:
+            messagebox.showerror(
+                "Buscar Atualizações",
+                f"Não foi possível consultar atualizações.\n\n{exc}",
+            )
+            return
+
+        remote_version = str(manifest.get("version", "")).strip()
+        installer_url = str(manifest.get("url", "")).strip()
+        title = str(manifest.get("title", "Atualização disponível")).strip()
+        description = str(manifest.get("description", "")).strip()
+
+        if not remote_version:
+            messagebox.showwarning("Buscar Atualizações", "O arquivo de atualização não informou a versão.")
+            return
+
+        if version_tuple(remote_version) <= version_tuple(APP_VERSION):
+            open_page = messagebox.askyesno(
+                "Buscar Atualizações",
+                f"Seu sistema já está atualizado.\n\nVersão instalada: {APP_VERSION}\nÚltima versão: {remote_version}\n\nDeseja abrir a página da versão mesmo assim?",
+            )
+        else:
+            text = f"{title}\n\nVersão instalada: {APP_VERSION}\nNova versão: {remote_version}"
+            if description:
+                text += f"\n\n{description}"
+            text += "\n\nDeseja abrir o instalador no GitHub?"
+            open_page = messagebox.askyesno("Buscar Atualizações", text)
+
+        if open_page:
+            webbrowser.open(installer_url or "https://github.com/L-DE-S-M-MEDEIROS/ponto-funcionarios/releases/latest")
+
     def about(self):
         messagebox.showinfo("Sobre", f"Sistema de ponto local\nVersão {APP_VERSION}")
 
@@ -648,6 +693,14 @@ class PontoDesktop(tk.Tk):
 def hhmm(value):
     normalized = normalize_time(value)
     return normalized or ""
+
+
+def version_tuple(value):
+    parts = []
+    for item in str(value).replace("-", ".").split("."):
+        digits = "".join(ch for ch in item if ch.isdigit())
+        parts.append(int(digits or 0))
+    return tuple(parts)
 
 
 def normalize_time(value):

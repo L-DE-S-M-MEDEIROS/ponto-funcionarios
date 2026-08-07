@@ -4,13 +4,15 @@ Aplicacao local para controle de ponto, banco de horas e relatorios mensais.
 
 ## Programa desktop
 
-- Abra `Abrir_Ponto_Desktop.bat` para usar a versao de Windows.
-- O atalho da Area de Trabalho usa `Abrir_Ponto_Desktop.vbs` para abrir sem janela de CMD.
+- Para instalar em outro computador, envie `Instalador.Ponto.Funcionarios.exe`.
+- A instalacao cria o atalho `Ponto Funcionarios` na Area de Trabalho.
+- O atalho abre `PontoFuncionarios.exe` direto, sem janela de CMD.
 - Versao atual: `26.8`.
 - Ela usa o banco local `data/ponto_funcionarios.db`.
 - Ao abrir, o sistema entra no menu principal com os botoes de funcionario, entrada/saida, consulta, importar ponto e sair.
 - A tela principal replica o fluxo do sistema antigo: menus, consulta/edicao de ponto, inclusao manual, gravar, incluir, cancelar, excluir e sair.
-- O arquivo principal do programa desktop e `desktop_app.py`.
+- O menu `AUXILIARES > Buscar Atualizacoes` consulta o manifesto publicado no GitHub.
+- O arquivo principal do programa desktop e `desktop_app.py`; o arquivo empacotado para uso e `PontoFuncionarios.exe`.
 
 ## Modulos
 
@@ -22,11 +24,11 @@ Aplicacao local para controle de ponto, banco de horas e relatorios mensais.
 
 ## Salvamento
 
-- Os dados ficam salvos no navegador de cada computador.
-- O sistema salva importacao, funcionarios, jornadas, filtros e ajustes manuais.
-- Use `Backup` para baixar um JSON.
-- Use `Restaurar` para levar os dados para outro computador.
-- Use `Limpar` para apagar os dados salvos naquele computador.
+- Os dados ficam salvos no computador de cada usuario, no banco SQLite local.
+- A pasta padrao da instalacao e `%LOCALAPPDATA%\PontoFuncionarios`.
+- O banco local fica em `%LOCALAPPDATA%\PontoFuncionarios\data\ponto_funcionarios.db`.
+- Ao reinstalar, o instalador atualiza os arquivos do programa e preserva o banco existente.
+- Para levar dados para outro computador, copie o arquivo do banco somente se quiser compartilhar os funcionarios e pontos daquele computador.
 
 ## Banco SQLite local
 

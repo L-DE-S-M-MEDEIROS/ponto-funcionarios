@@ -3,9 +3,9 @@
     "author":  "L DE S M MEDEIROS",
     "type":  "installer",
     "url":  "https://github.com/L-DE-S-M-MEDEIROS/ponto-funcionarios/releases/download/v26.8/Instalador.Ponto.Funcionarios.exe",
-    "sha256":  "fbb6dc62abeeb222b49a63f43dc6eea96f3d7e9a8da55381c15d57a5d099f3e0",
-    "title":  "Abertura no menu principal",
-    "description":  "O sistema agora abre no menu principal com botoes de Funcionario, Entrada/Saida, Consulta Entrada/Saida, Importar Ponto e Sair. A tela de alteracao fica no botao Consulta.",
+    "sha256":  "053d00d744f7bfc2f914d4a8d3f1fce4f703492df3efc9bbf5613f6ac80155ee",
+    "title":  "Instalador limpo e busca de atualizacoes",
+    "description":  "Instalador com executavel standalone, atalho direto sem janela de comando e menu Auxiliares > Buscar Atualizacoes.",
     "publishedAt":  "2026-08-07",
     "critical":  false
 }
