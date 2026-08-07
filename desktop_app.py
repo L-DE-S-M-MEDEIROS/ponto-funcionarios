@@ -16,7 +16,7 @@ else:
     APP_DIR = Path(__file__).resolve().parent
 DB_PATH = APP_DIR / "data" / "ponto_funcionarios.db"
 CONFIG_PATH = APP_DIR / "config.json"
-APP_VERSION = "26.08.10"
+APP_VERSION = "26.08.11"
 UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/L-DE-S-M-MEDEIROS/ponto-funcionarios/main/version.json"
 
 DEFAULT_CONFIG = {
@@ -1089,7 +1089,8 @@ class PontoDesktop(tk.Tk):
         year_entry.bind("<Return>", lambda _event: self.load_hour_bank())
 
         tk.Button(filters, text="Atualizar", width=12, command=self.load_hour_bank).grid(row=1, column=3, padx=6, pady=4)
-        tk.Button(filters, text="Voltar", width=12, command=self.show_home).grid(row=1, column=4, padx=6, pady=4)
+        tk.Button(filters, text="Gerar PDF", width=12, command=self.export_hour_bank_pdf).grid(row=1, column=4, padx=6, pady=4)
+        tk.Button(filters, text="Voltar", width=12, command=self.show_home).grid(row=1, column=5, padx=6, pady=4)
 
         table_frame = tk.Frame(root, bg="#eeeeee")
         table_frame.grid(row=2, column=0, sticky="nsew")
@@ -1177,6 +1178,140 @@ class PontoDesktop(tk.Tk):
         self.bank_summary_var.set(
             f"Resumo {year}: extras {format_minutes(annual_credit)} | faltantes {format_minutes(annual_debit)} | saldo {format_minutes(final_balance)}"
         )
+
+    def collect_hour_bank(self, year, employee_filter="TODOS"):
+        params = [year]
+        employee_clause = ""
+        if employee_filter and employee_filter != "TODOS":
+            employee_clause = "AND e.id = ?"
+            params.append(int(employee_filter.split(" - ", 1)[0]))
+
+        rows = self.conn.execute(
+            f"""
+            SELECT e.id, e.name, t.month,
+                   SUM(COALESCE(t.credit_decimal, 0)) AS credit,
+                   SUM(COALESCE(t.debit_decimal, 0)) AS debit
+            FROM employees e
+            LEFT JOIN time_entries t ON t.employee_id = e.id AND t.year = ?
+            WHERE 1 = 1 {employee_clause}
+            GROUP BY e.id, e.name, t.month
+            ORDER BY e.name, t.month
+            """,
+            params,
+        ).fetchall()
+
+        employees = {}
+        for row in rows:
+            employee = employees.setdefault(row["id"], {"name": row["name"], "credit": [0] * 12, "debit": [0] * 12})
+            month = row["month"]
+            if month:
+                employee["credit"][int(month) - 1] = round(float(row["credit"] or 0) * 60)
+                employee["debit"][int(month) - 1] = round(float(row["debit"] or 0) * 60)
+
+        employee_list = list(employees.values())
+        annual_credit = sum(sum(employee["credit"]) for employee in employee_list)
+        annual_debit = sum(sum(employee["debit"]) for employee in employee_list)
+        return {
+            "year": year,
+            "employee_filter": employee_filter,
+            "employees": employee_list,
+            "annual_credit": annual_credit,
+            "annual_debit": annual_debit,
+            "annual_balance": annual_credit - annual_debit,
+        }
+
+    def export_hour_bank_pdf(self, data=None, open_after=True):
+        if data is None:
+            try:
+                year = int(self.bank_year_var.get() if hasattr(self, "bank_year_var") else date.today().year)
+            except ValueError:
+                messagebox.showwarning("Banco de Horas", "Informe um ano válido.")
+                return None
+            employee_filter = self.bank_employee_var.get() if hasattr(self, "bank_employee_var") else "TODOS"
+            data = self.collect_hour_bank(year, employee_filter)
+        try:
+            pdf_path = self.generate_hour_bank_pdf(data)
+        except Exception as exc:
+            messagebox.showerror("Banco de Horas", f"Não foi possível gerar o PDF.\n\n{exc}")
+            return None
+        if open_after:
+            try:
+                os.startfile(pdf_path)
+            except OSError:
+                pass
+            messagebox.showinfo("Banco de Horas", f"PDF gerado para impressão:\n{pdf_path}")
+        return pdf_path
+
+    def generate_hour_bank_pdf(self, data):
+        from reportlab.lib import colors
+        from reportlab.lib.pagesizes import A4, landscape
+        from reportlab.lib.styles import getSampleStyleSheet
+        from reportlab.lib.units import mm
+        from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+
+        report_dir = APP_DIR / "relatorios" / str(data["year"]) / "banco_de_horas"
+        report_dir.mkdir(parents=True, exist_ok=True)
+        filter_name = "TODOS" if data["employee_filter"] == "TODOS" else safe_filename(data["employee_filter"].split(" - ", 1)[-1])
+        pdf_path = report_dir / f"BANCO_DE_HORAS_{data['year']}_{filter_name}.pdf"
+
+        doc = SimpleDocTemplate(str(pdf_path), pagesize=landscape(A4), leftMargin=8 * mm, rightMargin=8 * mm, topMargin=7 * mm, bottomMargin=7 * mm, title="Banco de Horas")
+        styles = getSampleStyleSheet()
+        story = []
+        story.append(
+            Table(
+                [[Paragraph("<b>BANCO DE HORAS</b><br/>BOLSAS BABY", styles["Normal"]), Paragraph(f"<b>Ano:</b> {data['year']}<br/><b>Gerado:</b> {datetime.now():%d/%m/%Y %H:%M}", styles["Normal"])]],
+                colWidths=[194 * mm, 75 * mm],
+                style=[
+                    ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#0b7285")),
+                    ("TEXTCOLOR", (0, 0), (-1, -1), colors.white),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 8),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+                    ("TOPPADDING", (0, 0), (-1, -1), 6),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ],
+            )
+        )
+        story.append(Spacer(1, 4 * mm))
+
+        headers = ["Funcionário", "Tipo", *[label[:3].upper() for _number, label in MONTHS], "Total Ano"]
+        table_data = [headers]
+        for employee in data["employees"]:
+            credits = employee["credit"]
+            debits = employee["debit"]
+            balance = [credit - debit for credit, debit in zip(credits, debits)]
+            table_data.append([employee["name"], "HORAS EXTRAS", *[format_minutes(value) for value in credits], format_minutes(sum(credits))])
+            table_data.append(["", "HORAS FALTANTES", *[format_minutes(value) for value in debits], format_minutes(sum(debits))])
+            table_data.append(["", "TOTAL MÊS", *[format_minutes(value) for value in balance], format_minutes(sum(balance))])
+        table_data.append(["TOTAL GERAL", "SALDO", *["" for _ in MONTHS], format_minutes(data["annual_balance"])])
+
+        table = Table(table_data, repeatRows=1, colWidths=[44 * mm, 28 * mm, *([13 * mm] * 12), 24 * mm])
+        styles_list = [
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#e8eef2")),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.HexColor("#17324d")),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("FONTSIZE", (0, 0), (-1, -1), 6.6),
+            ("GRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#b9c4cc")),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("ALIGN", (2, 0), (-1, -1), "CENTER"),
+            ("BACKGROUND", (0, -1), (-1, -1), colors.HexColor("#f7fafc")),
+            ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
+        ]
+        for row_index in range(1, len(table_data) - 1):
+            kind = table_data[row_index][1]
+            if kind == "HORAS EXTRAS":
+                styles_list.append(("BACKGROUND", (0, row_index), (-1, row_index), colors.HexColor("#ecfdf3")))
+            elif kind == "HORAS FALTANTES":
+                styles_list.append(("BACKGROUND", (0, row_index), (-1, row_index), colors.HexColor("#fff1f0")))
+            elif kind == "TOTAL MÊS":
+                styles_list.append(("BACKGROUND", (0, row_index), (-1, row_index), colors.HexColor("#eef4ff")))
+                styles_list.append(("FONTNAME", (0, row_index), (-1, row_index), "Helvetica-Bold"))
+        table.setStyle(TableStyle(styles_list))
+        story.append(table)
+        story.append(Spacer(1, 4 * mm))
+        story.append(Paragraph(f"Resumo {data['year']}: extras {format_minutes(data['annual_credit'])} | faltantes {format_minutes(data['annual_debit'])} | saldo {format_minutes(data['annual_balance'])}", styles["Normal"]))
+        doc.build(story)
+        return pdf_path
 
     def import_attendance_file(self):
         path = filedialog.askopenfilename(

@@ -32,7 +32,7 @@ if exist "%DB_FILE%" (
   powershell -NoProfile -ExecutionPolicy Bypass -Command "$db='%DB_FILE%'; $backupDir='%BACKUP_DIR%'; New-Item -ItemType Directory -Path $backupDir -Force | Out-Null; $backup=Join-Path $backupDir ('ponto_funcionarios_' + (Get-Date -Format 'yyyyMMdd_HHmmss') + '.db'); Copy-Item -LiteralPath $db -Destination $backup -Force"
 )
 
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$install='%INSTALL_DIR%'; $preserve=@('data','backups'); if (Test-Path -LiteralPath $install) { Get-ChildItem -LiteralPath $install -Force | Where-Object { $preserve -notcontains $_.Name } | Remove-Item -Recurse -Force }"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$install='%INSTALL_DIR%'; $preserve=@('data','backups','config.json'); if (Test-Path -LiteralPath $install) { Get-ChildItem -LiteralPath $install -Force | Where-Object { $preserve -notcontains $_.Name } | Remove-Item -Recurse -Force }"
 if not exist "%INSTALL_DIR%\data" mkdir "%INSTALL_DIR%\data"
 if not exist "%INSTALL_DIR%\scripts" mkdir "%INSTALL_DIR%\scripts"
 
