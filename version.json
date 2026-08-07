@@ -1,11 +1,11 @@
 ﻿{
-    "version":  "26.08.2",
+    "version":  "26.08.3",
     "author":  "L DE S M MEDEIROS",
     "type":  "installer",
-    "url":  "https://github.com/L-DE-S-M-MEDEIROS/ponto-funcionarios/releases/download/v26.08.2/Instalador.Ponto.Funcionarios.exe",
-    "sha256":  "6cd4fe3f2965b10689fb6b8c3a6953adbea92c675e48d1987083fc194207f534",
-    "title":  "Versao 26.08.2",
-    "description":  "Adiciona botao Banco de Horas no menu principal e tela de resumo mensal por funcionario baseada na planilha BANCO DE HORAS 2026.",
+    "url":  "https://github.com/L-DE-S-M-MEDEIROS/ponto-funcionarios/releases/download/v26.08.3/Instalador.Ponto.Funcionarios.exe",
+    "sha256":  "3bf3c42ce68def22429f0fb9352b952bb7ccac90c04b53db1508b148fcdfe1c8",
+    "title":  "Versao 26.08.3",
+    "description":  "Implementa o botao Importar Ponto para ler TXT do relogio, agrupar batidas por funcionario e dia, calcular horas trabalhadas, credito e debito.",
     "publishedAt":  "2026-08-07",
     "critical":  false
 }

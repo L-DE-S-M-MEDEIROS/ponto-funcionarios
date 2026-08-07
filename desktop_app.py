@@ -6,7 +6,7 @@ import urllib.request
 import webbrowser
 from datetime import date, datetime
 from pathlib import Path
-from tkinter import messagebox, ttk
+from tkinter import filedialog, messagebox, ttk
 
 
 if getattr(sys, "frozen", False):
@@ -14,7 +14,7 @@ if getattr(sys, "frozen", False):
 else:
     APP_DIR = Path(__file__).resolve().parent
 DB_PATH = APP_DIR / "data" / "ponto_funcionarios.db"
-APP_VERSION = "26.08.2"
+APP_VERSION = "26.08.3"
 UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/L-DE-S-M-MEDEIROS/ponto-funcionarios/main/version.json"
 
 
@@ -116,7 +116,7 @@ class PontoDesktop(tk.Tk):
         processos.add_command(label="Ponto Biométrico Nitgen", command=self.not_ready)
         processos.add_command(label="Ponto por Barras ou Senha", command=self.not_ready)
         processos.add_command(label="Impressão do Ponto", command=self.show_report)
-        processos.add_command(label="Importar Ponto", command=self.not_ready)
+        processos.add_command(label="Importar Ponto", command=self.import_attendance_file)
         processos.add_separator()
         processos.add_command(label="Retirada de Cesta", command=self.not_ready)
         processos.add_command(label="Relatório Retirada de Cesta", command=self.not_ready)
@@ -220,7 +220,7 @@ class PontoDesktop(tk.Tk):
         self.home_button(toolbar, "📝", "Entrada / Saída(F3)", self.not_ready, 0, 1, width=20)
         self.home_button(toolbar, "🔎", "Consulta Entrada/Saída(F4)", self.show_manual_point, 0, 2, width=26)
         self.home_button(toolbar, "❌", "Sair(F5)", self.destroy, 0, 3, width=12)
-        self.home_button(toolbar, "🟢", "Importar Ponto", self.not_ready, 1, 0)
+        self.home_button(toolbar, "🟢", "Importar Ponto", self.import_attendance_file, 1, 0)
         self.home_button(toolbar, "⏱", "Banco de Horas", self.show_hour_bank, 1, 1, width=20)
 
         self.clock_var = tk.StringVar()
@@ -619,6 +619,132 @@ class PontoDesktop(tk.Tk):
             f"Resumo {year}: extras {format_minutes(annual_credit)} | faltantes {format_minutes(annual_debit)} | saldo {format_minutes(final_balance)}"
         )
 
+    def import_attendance_file(self):
+        path = filedialog.askopenfilename(
+            title="Importar Ponto",
+            filetypes=[("Arquivos TXT", "*.txt"), ("Todos os arquivos", "*.*")],
+        )
+        if not path:
+            return
+
+        try:
+            summary = self.import_attendance_path(Path(path))
+        except Exception as exc:
+            messagebox.showerror("Importar Ponto", f"Não foi possível importar o arquivo.\n\n{exc}")
+            return
+
+        messagebox.showinfo(
+            "Importar Ponto",
+            "Importação concluída.\n\n"
+            f"Arquivo: {Path(path).name}\n"
+            f"Batidas lidas: {summary['punches']}\n"
+            f"Dias atualizados: {summary['days']}\n"
+            f"Funcionários não encontrados: {summary['unknown']}",
+        )
+
+    def import_attendance_path(self, path):
+        punches = parse_attendance_txt(path)
+        employees = {
+            str(row["clock_id"]).strip(): row
+            for row in self.conn.execute("SELECT * FROM employees WHERE clock_id IS NOT NULL AND clock_id <> ''")
+        }
+
+        grouped = {}
+        unknown = set()
+        for punch in punches:
+            employee = employees.get(punch["clock_id"])
+            if not employee:
+                unknown.add(f"{punch['clock_id']} - {punch['name']}")
+                continue
+            key = (employee["id"], punch["stamp"].date())
+            grouped.setdefault(key, {"employee": employee, "punches": []})["punches"].append(punch["stamp"])
+
+        updated_days = 0
+        for (employee_id, work_day), data in grouped.items():
+            employee = data["employee"]
+            stamps = sorted(set(data["punches"]))
+            times = [stamp.strftime("%H:%M") for stamp in stamps[:8]]
+            while len(times) < 8:
+                times.append(None)
+
+            expected = self.expected_hours_for_date(employee, work_day)
+            worked_minutes = calculate_worked(times)
+            expected_minutes = minutes(expected)
+            diff = worked_minutes - expected_minutes
+            tolerance = int(employee["tolerance_minutes"] or 0)
+            if abs(diff) <= tolerance:
+                diff = 0
+            credit_minutes = max(diff, 0)
+            debit_minutes = max(-diff, 0)
+            note = f"Importado de {path.name}"
+            if len(stamps) > 8:
+                note += f" | {len(stamps) - 8} batida(s) extra(s) ignorada(s)"
+
+            existing = self.conn.execute(
+                "SELECT id FROM time_entries WHERE employee_id = ? AND work_date = ? ORDER BY id LIMIT 1",
+                (employee_id, work_day.isoformat()),
+            ).fetchone()
+            values = (
+                employee_id,
+                work_day.isoformat(),
+                work_day.day,
+                work_day.month,
+                work_day.year,
+                *times,
+                expected,
+                format_minutes(worked_minutes),
+                format_minutes(credit_minutes),
+                format_minutes(debit_minutes),
+                credit_minutes / 60,
+                debit_minutes / 60,
+                0,
+                "N",
+                note,
+                f"txt:{path.name}:{employee['clock_id']}:{work_day.isoformat()}",
+            )
+
+            if existing:
+                self.conn.execute(
+                    """
+                    UPDATE time_entries
+                    SET employee_id=?, work_date=?, day=?, month=?, year=?,
+                        entrada1=?, saida1=?, entrada2=?, saida2=?,
+                        entrada3=?, saida3=?, entrada4=?, saida4=?,
+                        expected_hours=?, worked_hours=?, credit_hours=?, debit_hours=?,
+                        credit_decimal=?, debit_decimal=?, extra_night_decimal=?,
+                        absence=?, note=?, legacy_id=?
+                    WHERE id=?
+                    """,
+                    (*values, existing["id"]),
+                )
+            else:
+                self.conn.execute(
+                    """
+                    INSERT INTO time_entries (
+                        employee_id, work_date, day, month, year,
+                        entrada1, saida1, entrada2, saida2,
+                        entrada3, saida3, entrada4, saida4,
+                        expected_hours, worked_hours, credit_hours, debit_hours,
+                        credit_decimal, debit_decimal, extra_night_decimal,
+                        absence, note, legacy_id
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    values,
+                )
+            updated_days += 1
+
+        self.conn.commit()
+        if hasattr(self, "tree"):
+            self.load_entries()
+        return {"punches": len(punches), "days": updated_days, "unknown": len(unknown)}
+
+    def expected_hours_for_date(self, employee, work_day):
+        if work_day.weekday() == 5:
+            return employee["saturday_hours"] or "04:00"
+        if work_day.weekday() == 6:
+            return employee["sunday_hours"] or "00:00"
+        return employee["weekday_hours"] or "08:00"
+
     def save_entry(self):
         employee_id = self.selected_employee_id()
         if not employee_id:
@@ -824,6 +950,50 @@ def version_tuple(value):
         digits = "".join(ch for ch in item if ch.isdigit())
         parts.append(int(digits or 0))
     return tuple(parts)
+
+
+def parse_attendance_txt(path):
+    text = read_text_file(path)
+    punches = []
+    for line in text.splitlines():
+        line = line.strip()
+        if not line or line.upper().startswith("ID"):
+            continue
+        parts = [part.strip() for part in line.split("\t") if part.strip()]
+        if len(parts) < 4:
+            continue
+        clock_id, name, department, raw_stamp = parts[:4]
+        stamp = parse_brazilian_datetime(raw_stamp)
+        if not stamp:
+            continue
+        punches.append(
+            {
+                "clock_id": clock_id,
+                "name": name,
+                "department": department,
+                "stamp": stamp,
+            }
+        )
+    return punches
+
+
+def read_text_file(path):
+    for encoding in ("utf-8-sig", "utf-8", "cp1252", "latin-1"):
+        try:
+            return Path(path).read_text(encoding=encoding)
+        except UnicodeDecodeError:
+            continue
+    return Path(path).read_text(errors="replace")
+
+
+def parse_brazilian_datetime(value):
+    normalized = " ".join(str(value).strip().split())
+    for fmt in ("%d/%m/%Y %H:%M:%S", "%d/%m/%Y %H:%M"):
+        try:
+            return datetime.strptime(normalized, fmt)
+        except ValueError:
+            continue
+    return None
 
 
 def normalize_time(value):
