@@ -1,11 +1,11 @@
 ﻿{
-    "version":  "26.08.4",
+    "version":  "26.08.5",
     "author":  "L DE S M MEDEIROS",
     "type":  "installer",
-    "url":  "https://github.com/L-DE-S-M-MEDEIROS/ponto-funcionarios/releases/download/v26.08.4/Instalador.Ponto.Funcionarios.exe",
-    "sha256":  "c64cb5e28e3014561baa280716580623254a442c25160fa0a750ca8733c7d068",
-    "title":  "Versao 26.08.4",
-    "description":  "Corrige o instalador para chamar cmd.exe no Windows atual ao executar a rotina de instalacao.",
+    "url":  "https://github.com/L-DE-S-M-MEDEIROS/ponto-funcionarios/releases/download/v26.08.5/Instalador.Ponto.Funcionarios.exe",
+    "sha256":  "a3d8321e293a2e901a1aed71b22d65fc066236acdb1eba99c97510e5fc036789",
+    "title":  "Versao 26.08.5",
+    "description":  "Implementa Conferencia Individual com totais de credito, debito, horas trabalhadas e adicional conforme os dados do sistema antigo.",
     "publishedAt":  "2026-08-07",
     "critical":  false
 }

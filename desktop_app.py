@@ -14,7 +14,7 @@ if getattr(sys, "frozen", False):
 else:
     APP_DIR = Path(__file__).resolve().parent
 DB_PATH = APP_DIR / "data" / "ponto_funcionarios.db"
-APP_VERSION = "26.08.4"
+APP_VERSION = "26.08.5"
 UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/L-DE-S-M-MEDEIROS/ponto-funcionarios/main/version.json"
 
 
@@ -339,7 +339,7 @@ class PontoDesktop(tk.Tk):
 
         side = tk.Frame(root, bg="#eeeeee")
         side.grid(row=1, column=7, rowspan=3, sticky="ns", padx=8)
-        tk.Button(side, text="Conferência Individual", width=22, command=self.load_entries).pack(pady=4)
+        tk.Button(side, text="Conferência Individual", width=22, command=self.show_individual_conference).pack(pady=4)
         tk.Button(side, text="Conferência Todos", width=22, command=self.load_entries).pack(pady=4)
         tk.Button(side, text="Conferência por Período", width=22, command=self.load_entries).pack(pady=(48, 4))
         tk.Button(side, text="Funcionários Presentes", width=22, command=self.not_ready).pack(pady=4)
@@ -459,6 +459,120 @@ class PontoDesktop(tk.Tk):
                 ),
             )
         self.hours_month_var.set(format_minutes(worked_total))
+
+    def show_individual_conference(self):
+        employee_id = self.selected_employee_id()
+        if not employee_id:
+            messagebox.showwarning("Conferência Individual", "Selecione um funcionário.")
+            return
+        try:
+            year = int(self.year_var.get() or date.today().year)
+        except ValueError:
+            messagebox.showwarning("Conferência Individual", "Informe um ano válido.")
+            return
+
+        month = self.selected_month()
+        employee = self.conn.execute("SELECT * FROM employees WHERE id = ?", (employee_id,)).fetchone()
+        rows = self.conn.execute(
+            """
+            SELECT *
+            FROM time_entries
+            WHERE employee_id = ? AND month = ? AND year = ?
+            ORDER BY day, id
+            """,
+            (employee_id, month, year),
+        ).fetchall()
+
+        if not rows:
+            messagebox.showinfo("Conferência Individual", "Sem dados para o funcionário e mês selecionados.")
+            return
+
+        credit_total = round(sum(float(row["credit_decimal"] or 0) * 60 for row in rows))
+        debit_total = round(sum(float(row["debit_decimal"] or 0) * 60 for row in rows))
+        worked_total = sum(minutes(row["worked_hours"]) for row in rows)
+        night_total = round(sum(float(row["extra_night_decimal"] or 0) * 60 for row in rows))
+        balance_total = credit_total - debit_total
+        absence_total = sum(1 for row in rows if (row["absence"] or "").upper() == "S")
+
+        month_label = next((label for number, label in MONTHS if int(number) == month), str(month))
+        window = tk.Toplevel(self)
+        window.title("Conferência Individual")
+        window.geometry("980x620")
+        window.configure(bg="#eeeeee")
+        window.transient(self)
+        window.columnconfigure(0, weight=1)
+        window.rowconfigure(2, weight=1)
+
+        tk.Label(
+            window,
+            text=f"Conferência Individual - {employee['name']}",
+            bg="#eeeeee",
+            fg="#555555",
+            font=("Arial", 18, "bold"),
+        ).grid(row=0, column=0, sticky="w", padx=10, pady=(10, 2))
+        tk.Label(
+            window,
+            text=f"{month_label} / {year}    Departamento: {employee['department'] or ''}",
+            bg="#eeeeee",
+            fg="#222222",
+            font=("Arial", 10, "bold"),
+        ).grid(row=1, column=0, sticky="w", padx=10, pady=(0, 8))
+
+        summary = tk.Frame(window, bg="#eeeeee")
+        summary.grid(row=0, column=1, rowspan=2, sticky="e", padx=10, pady=10)
+        summary_items = [
+            ("Dias", str(len(rows))),
+            ("Horas Trabalhadas", format_minutes(worked_total)),
+            ("Crédito", format_minutes(credit_total)),
+            ("Débito", format_minutes(debit_total)),
+            ("Saldo", format_minutes(balance_total)),
+            ("Adicional", format_minutes(night_total)),
+            ("Faltas", str(absence_total)),
+        ]
+        for index, (label, value) in enumerate(summary_items):
+            tk.Label(summary, text=label, bg="#eeeeee", fg="#555555", font=("Arial", 9, "bold")).grid(row=index, column=0, sticky="e", padx=(0, 6))
+            tk.Label(summary, text=value, bg="#fff8b8", fg="#111111", width=12, relief="solid", bd=1, font=("Arial", 10, "bold")).grid(row=index, column=1, sticky="ew", pady=1)
+
+        columns = ("day", "entrada1", "saida1", "entrada2", "saida2", "entrada3", "saida3", "entrada4", "saida4", "worked", "credit", "debit", "night", "note")
+        tree = ttk.Treeview(window, columns=columns, show="headings", height=18)
+        headings = ["Dia", "Entra.1", "Saída1", "Entra.2", "Saída2", "Entra.3", "Saída3", "Entra.4", "Saída4", "Trabalhada", "Crédito", "Débito", "Adicional", "Obs"]
+        widths = [45, 65, 65, 65, 65, 65, 65, 65, 65, 85, 70, 70, 75, 180]
+        for col, heading, width in zip(columns, headings, widths):
+            tree.heading(col, text=heading)
+            tree.column(col, width=width, minwidth=width, stretch=col == "note")
+        tree.grid(row=2, column=0, columnspan=2, sticky="nsew", padx=10, pady=6)
+
+        for row in rows:
+            tree.insert(
+                "",
+                "end",
+                values=(
+                    row["day"],
+                    hhmm(row["entrada1"]),
+                    hhmm(row["saida1"]),
+                    hhmm(row["entrada2"]),
+                    hhmm(row["saida2"]),
+                    hhmm(row["entrada3"]),
+                    hhmm(row["saida3"]),
+                    hhmm(row["entrada4"]),
+                    hhmm(row["saida4"]),
+                    hhmm(row["worked_hours"]),
+                    hhmm(row["credit_hours"]),
+                    hhmm(row["debit_hours"]),
+                    decimal_to_hhmm(row["extra_night_decimal"]),
+                    row["note"] or "",
+                ),
+            )
+
+        bottom = tk.Frame(window, bg="#eeeeee")
+        bottom.grid(row=3, column=0, columnspan=2, sticky="ew", padx=10, pady=8)
+        tk.Label(
+            bottom,
+            text="Base original: soma de credito, debito, horasdiad e adicionaln da tabela vendedor1.",
+            bg="#eeeeee",
+            fg="#555555",
+        ).pack(side="left")
+        tk.Button(bottom, text="Fechar", width=12, command=window.destroy).pack(side="right")
 
     def select_entry(self, _event=None):
         selected = self.tree.selection()
