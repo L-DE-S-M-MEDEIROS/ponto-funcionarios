@@ -7,7 +7,7 @@ Aplicacao local para controle de ponto, banco de horas e relatorios mensais.
 - Para instalar em outro computador, envie `Instalador.Ponto.Funcionarios.exe`.
 - A instalacao cria o atalho `Ponto Funcionarios` na Area de Trabalho.
 - O atalho abre `PontoFuncionarios.exe` direto, sem janela de CMD.
-- Versao atual: `26.8`.
+- Versao atual: `26.08.1`.
 - Ela usa o banco local `data/ponto_funcionarios.db`.
 - Ao abrir, o sistema entra no menu principal com os botoes de funcionario, entrada/saida, consulta, importar ponto e sair.
 - A tela principal replica o fluxo do sistema antigo: menus, consulta/edicao de ponto, inclusao manual, gravar, incluir, cancelar, excluir e sair.

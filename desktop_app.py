@@ -14,7 +14,7 @@ if getattr(sys, "frozen", False):
 else:
     APP_DIR = Path(__file__).resolve().parent
 DB_PATH = APP_DIR / "data" / "ponto_funcionarios.db"
-APP_VERSION = "26.8"
+APP_VERSION = "26.08.1"
 UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/L-DE-S-M-MEDEIROS/ponto-funcionarios/main/version.json"
 
 

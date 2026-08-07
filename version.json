@@ -1,11 +1,11 @@
 ﻿{
-    "version":  "26.8",
+    "version":  "26.08.1",
     "author":  "L DE S M MEDEIROS",
     "type":  "installer",
-    "url":  "https://github.com/L-DE-S-M-MEDEIROS/ponto-funcionarios/releases/download/v26.8/Instalador.Ponto.Funcionarios.exe",
-    "sha256":  "053d00d744f7bfc2f914d4a8d3f1fce4f703492df3efc9bbf5613f6ac80155ee",
-    "title":  "Instalador limpo e busca de atualizacoes",
-    "description":  "Instalador com executavel standalone, atalho direto sem janela de comando e menu Auxiliares > Buscar Atualizacoes.",
+    "url":  "https://github.com/L-DE-S-M-MEDEIROS/ponto-funcionarios/releases/download/v26.08.1/Instalador.Ponto.Funcionarios.exe",
+    "sha256":  "4bcccdb421f816366dab7d6c79d10993de0cccbe7a645fb877315338a3b04d35",
+    "title":  "Versao 26.08.1",
+    "description":  "Padronizacao da numeracao por ano, mes e lancamento. Instalador com executavel standalone, atalho direto sem janela de comando e menu Auxiliares > Buscar Atualizacoes.",
     "publishedAt":  "2026-08-07",
     "critical":  false
 }

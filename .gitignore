@@ -3,7 +3,9 @@ __pycache__/
 *.error.txt
 *.spec
 build/
+build-*/
 dist/
+dist-*/
 release/
 *.tmp
 
