@@ -14,7 +14,7 @@ if getattr(sys, "frozen", False):
 else:
     APP_DIR = Path(__file__).resolve().parent
 DB_PATH = APP_DIR / "data" / "ponto_funcionarios.db"
-APP_VERSION = "26.08.1"
+APP_VERSION = "26.08.2"
 UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/L-DE-S-M-MEDEIROS/ponto-funcionarios/main/version.json"
 
 
@@ -112,6 +112,7 @@ class PontoDesktop(tk.Tk):
 
         processos = tk.Menu(menu, tearoff=False)
         processos.add_command(label="Consulta Ponto - Edição", command=self.show_manual_point)
+        processos.add_command(label="Banco de Horas", command=self.show_hour_bank)
         processos.add_command(label="Ponto Biométrico Nitgen", command=self.not_ready)
         processos.add_command(label="Ponto por Barras ou Senha", command=self.not_ready)
         processos.add_command(label="Impressão do Ponto", command=self.show_report)
@@ -220,6 +221,7 @@ class PontoDesktop(tk.Tk):
         self.home_button(toolbar, "🔎", "Consulta Entrada/Saída(F4)", self.show_manual_point, 0, 2, width=26)
         self.home_button(toolbar, "❌", "Sair(F5)", self.destroy, 0, 3, width=12)
         self.home_button(toolbar, "🟢", "Importar Ponto", self.not_ready, 1, 0)
+        self.home_button(toolbar, "⏱", "Banco de Horas", self.show_hour_bank, 1, 1, width=20)
 
         self.clock_var = tk.StringVar()
         clock_frame = tk.Frame(root, bg="white")
@@ -495,6 +497,127 @@ class PontoDesktop(tk.Tk):
             else:
                 variable.set("")
         self.field_vars["expected"].set("0:00")
+
+    def show_hour_bank(self):
+        self.clear()
+        self.configure(bg="#eeeeee")
+
+        root = tk.Frame(self, bg="#eeeeee")
+        root.pack(fill="both", expand=True, padx=10, pady=10)
+        root.columnconfigure(0, weight=1)
+        root.rowconfigure(2, weight=1)
+
+        header = tk.Frame(root, bg="#eeeeee")
+        header.grid(row=0, column=0, sticky="ew")
+        tk.Label(header, text="Banco de Horas", bg="#eeeeee", fg="#666666", font=("Arial", 26, "bold")).pack(side="left")
+
+        filters = tk.LabelFrame(root, text="Filtros", bg="#eeeeee", font=("Arial", 10, "bold"))
+        filters.grid(row=1, column=0, sticky="ew", pady=(8, 6))
+        filters.columnconfigure(1, weight=1)
+
+        self.bank_employee_var = tk.StringVar(value="TODOS")
+        self.bank_year_var = tk.StringVar(value=str(date.today().year))
+        employee_values = ["TODOS"] + self.employee_options()
+
+        tk.Label(filters, text="Funcionário", bg="#eeeeee", font=("Arial", 10, "bold")).grid(row=0, column=0, sticky="w", padx=6)
+        employee_combo = ttk.Combobox(filters, textvariable=self.bank_employee_var, values=employee_values, state="readonly")
+        employee_combo.grid(row=1, column=0, columnspan=2, sticky="ew", padx=6, pady=4)
+        employee_combo.bind("<<ComboboxSelected>>", lambda _event: self.load_hour_bank())
+
+        tk.Label(filters, text="Ano", bg="#eeeeee", font=("Arial", 10, "bold")).grid(row=0, column=2, sticky="w", padx=6)
+        year_entry = tk.Entry(filters, textvariable=self.bank_year_var, width=8, bg="#fff8b8")
+        year_entry.grid(row=1, column=2, sticky="w", padx=6, pady=4)
+        year_entry.bind("<Return>", lambda _event: self.load_hour_bank())
+
+        tk.Button(filters, text="Atualizar", width=12, command=self.load_hour_bank).grid(row=1, column=3, padx=6, pady=4)
+        tk.Button(filters, text="Voltar", width=12, command=self.show_home).grid(row=1, column=4, padx=6, pady=4)
+
+        table_frame = tk.Frame(root, bg="#eeeeee")
+        table_frame.grid(row=2, column=0, sticky="nsew")
+        table_frame.columnconfigure(0, weight=1)
+        table_frame.rowconfigure(0, weight=1)
+
+        month_keys = [label[:3].upper() for _number, label in MONTHS]
+        columns = ("employee", "kind", *month_keys, "total")
+        self.hour_bank_tree = ttk.Treeview(table_frame, columns=columns, show="headings", height=18)
+        headings = ["Funcionário", "Tipo", *month_keys, "Total Ano"]
+        widths = [180, 115, *([76] * 12), 90]
+        for col, heading, width in zip(columns, headings, widths):
+            self.hour_bank_tree.heading(col, text=heading)
+            self.hour_bank_tree.column(col, width=width, minwidth=width, stretch=col == "employee")
+        self.hour_bank_tree.grid(row=0, column=0, sticky="nsew")
+
+        y_scroll = ttk.Scrollbar(table_frame, orient="vertical", command=self.hour_bank_tree.yview)
+        y_scroll.grid(row=0, column=1, sticky="ns")
+        self.hour_bank_tree.configure(yscrollcommand=y_scroll.set)
+
+        self.hour_bank_tree.tag_configure("credit", background="#e8ffe8")
+        self.hour_bank_tree.tag_configure("debit", background="#ffe8e8")
+        self.hour_bank_tree.tag_configure("balance", background="#eef4ff", font=("Arial", 9, "bold"))
+
+        self.bank_summary_var = tk.StringVar()
+        tk.Label(root, textvariable=self.bank_summary_var, bg="#eeeeee", fg="#222222", font=("Arial", 11, "bold")).grid(row=3, column=0, sticky="w", pady=(8, 0))
+
+        self.bind("<F5>", lambda _event: self.show_home())
+        self.load_hour_bank()
+
+    def load_hour_bank(self):
+        if not hasattr(self, "hour_bank_tree"):
+            return
+        for item in self.hour_bank_tree.get_children():
+            self.hour_bank_tree.delete(item)
+
+        try:
+            year = int(self.bank_year_var.get())
+        except ValueError:
+            messagebox.showwarning("Banco de Horas", "Informe um ano válido.")
+            return
+
+        employee_filter = self.bank_employee_var.get()
+        params = [year]
+        employee_clause = ""
+        if employee_filter and employee_filter != "TODOS":
+            employee_clause = "AND e.id = ?"
+            params.append(int(employee_filter.split(" - ", 1)[0]))
+
+        rows = self.conn.execute(
+            f"""
+            SELECT e.id, e.name, t.month,
+                   SUM(COALESCE(t.credit_decimal, 0)) AS credit,
+                   SUM(COALESCE(t.debit_decimal, 0)) AS debit
+            FROM employees e
+            LEFT JOIN time_entries t ON t.employee_id = e.id AND t.year = ?
+            WHERE 1 = 1 {employee_clause}
+            GROUP BY e.id, e.name, t.month
+            ORDER BY e.name, t.month
+            """,
+            params,
+        ).fetchall()
+
+        employees = {}
+        for row in rows:
+            employee = employees.setdefault(row["id"], {"name": row["name"], "credit": [0] * 12, "debit": [0] * 12})
+            month = row["month"]
+            if month:
+                employee["credit"][int(month) - 1] = round(float(row["credit"] or 0) * 60)
+                employee["debit"][int(month) - 1] = round(float(row["debit"] or 0) * 60)
+
+        annual_credit = 0
+        annual_debit = 0
+        for employee in employees.values():
+            credits = employee["credit"]
+            debits = employee["debit"]
+            balance = [credit - debit for credit, debit in zip(credits, debits)]
+            annual_credit += sum(credits)
+            annual_debit += sum(debits)
+            self.hour_bank_tree.insert("", "end", values=(employee["name"], "HORAS EXTRAS", *[format_minutes(value) for value in credits], format_minutes(sum(credits))), tags=("credit",))
+            self.hour_bank_tree.insert("", "end", values=("", "HORAS FALTANTES", *[format_minutes(value) for value in debits], format_minutes(sum(debits))), tags=("debit",))
+            self.hour_bank_tree.insert("", "end", values=("", "TOTAL MÊS", *[format_minutes(value) for value in balance], format_minutes(sum(balance))), tags=("balance",))
+
+        final_balance = annual_credit - annual_debit
+        self.bank_summary_var.set(
+            f"Resumo {year}: extras {format_minutes(annual_credit)} | faltantes {format_minutes(annual_debit)} | saldo {format_minutes(final_balance)}"
+        )
 
     def save_entry(self):
         employee_id = self.selected_employee_id()

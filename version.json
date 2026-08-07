@@ -1,11 +1,11 @@
 ﻿{
-    "version":  "26.08.1",
+    "version":  "26.08.2",
     "author":  "L DE S M MEDEIROS",
     "type":  "installer",
-    "url":  "https://github.com/L-DE-S-M-MEDEIROS/ponto-funcionarios/releases/download/v26.08.1/Instalador.Ponto.Funcionarios.exe",
-    "sha256":  "4bcccdb421f816366dab7d6c79d10993de0cccbe7a645fb877315338a3b04d35",
-    "title":  "Versao 26.08.1",
-    "description":  "Padronizacao da numeracao por ano, mes e lancamento. Instalador com executavel standalone, atalho direto sem janela de comando e menu Auxiliares > Buscar Atualizacoes.",
+    "url":  "https://github.com/L-DE-S-M-MEDEIROS/ponto-funcionarios/releases/download/v26.08.2/Instalador.Ponto.Funcionarios.exe",
+    "sha256":  "6cd4fe3f2965b10689fb6b8c3a6953adbea92c675e48d1987083fc194207f534",
+    "title":  "Versao 26.08.2",
+    "description":  "Adiciona botao Banco de Horas no menu principal e tela de resumo mensal por funcionario baseada na planilha BANCO DE HORAS 2026.",
     "publishedAt":  "2026-08-07",
     "critical":  false
 }

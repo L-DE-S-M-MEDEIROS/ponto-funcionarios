@@ -7,9 +7,10 @@ Aplicacao local para controle de ponto, banco de horas e relatorios mensais.
 - Para instalar em outro computador, envie `Instalador.Ponto.Funcionarios.exe`.
 - A instalacao cria o atalho `Ponto Funcionarios` na Area de Trabalho.
 - O atalho abre `PontoFuncionarios.exe` direto, sem janela de CMD.
-- Versao atual: `26.08.1`.
+- Versao atual: `26.08.2`.
 - Ela usa o banco local `data/ponto_funcionarios.db`.
 - Ao abrir, o sistema entra no menu principal com os botoes de funcionario, entrada/saida, consulta, importar ponto e sair.
+- O menu principal tambem tem o botao `Banco de Horas`, com resumo mensal no modelo da planilha de 2026.
 - A tela principal replica o fluxo do sistema antigo: menus, consulta/edicao de ponto, inclusao manual, gravar, incluir, cancelar, excluir e sair.
 - O menu `AUXILIARES > Buscar Atualizacoes` consulta o manifesto publicado no GitHub.
 - O arquivo principal do programa desktop e `desktop_app.py`; o arquivo empacotado para uso e `PontoFuncionarios.exe`.
