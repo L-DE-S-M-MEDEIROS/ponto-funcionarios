@@ -16,7 +16,7 @@ else:
     APP_DIR = Path(__file__).resolve().parent
 DB_PATH = APP_DIR / "data" / "ponto_funcionarios.db"
 CONFIG_PATH = APP_DIR / "config.json"
-APP_VERSION = "26.08.14"
+APP_VERSION = "26.08.15"
 UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/L-DE-S-M-MEDEIROS/ponto-funcionarios/main/version.json"
 
 DEFAULT_CONFIG = {
@@ -171,11 +171,13 @@ class PontoDesktop(tk.Tk):
                   debit_decimal REAL,
                   extra_night_decimal REAL,
                   absence TEXT,
+                  holiday TEXT,
                   note TEXT,
                   legacy_id TEXT
                 )
                 """
             )
+            self.ensure_time_entry_columns()
             self.conn.commit()
             return
 
@@ -222,12 +224,22 @@ class PontoDesktop(tk.Tk):
               debit_decimal REAL,
               extra_night_decimal REAL,
               absence TEXT,
+              holiday TEXT,
               note TEXT,
               legacy_id TEXT
             )
             """
         )
+        self.ensure_time_entry_columns()
         self.conn.commit()
+
+    def ensure_time_entry_columns(self):
+        if getattr(self.conn, "kind", "local") == "postgres":
+            self.conn.execute("ALTER TABLE time_entries ADD COLUMN IF NOT EXISTS holiday TEXT")
+            return
+        columns = [row["name"] for row in self.conn.execute("PRAGMA table_info(time_entries)").fetchall()]
+        if "holiday" not in columns:
+            self.conn.execute("ALTER TABLE time_entries ADD COLUMN holiday TEXT")
 
     def create_menu(self):
         menu = tk.Menu(self, tearoff=False)
@@ -564,13 +576,18 @@ class PontoDesktop(tk.Tk):
         self.small_field(day_box, "Dia do mes", "day", 0, 0, 10, bg="#fff8b8")
         self.small_field(day_box, "Semana", "week", 0, 1, 12)
 
-        occurrence_box = tk.LabelFrame(edit, text="Ocorrencias do dia", bg="#ffffff", fg="#1f2933", font=("Arial", 10, "bold"), padx=8, pady=8)
+        occurrence_box = tk.LabelFrame(edit, text="Ocorrencias do dia", bg="#fff7ed", fg="#9a3412", font=("Arial", 10, "bold"), padx=8, pady=8)
         occurrence_box.grid(row=0, column=1, sticky="nsew", padx=6)
-        tk.Checkbutton(occurrence_box, text="Falta", variable=self.field_vars["absence"], bg="#ffffff", font=("Arial", 10, "bold")).grid(row=0, column=0, sticky="w", padx=2, pady=3)
-        tk.Checkbutton(occurrence_box, text="Feriado", variable=self.field_vars["holiday"], bg="#ffffff", font=("Arial", 10, "bold")).grid(row=0, column=1, sticky="w", padx=10, pady=3)
-        tk.Label(occurrence_box, text="Observacao", bg="#ffffff", font=("Arial", 9, "bold")).grid(row=1, column=0, columnspan=2, sticky="w", padx=2, pady=(8, 2))
-        tk.Entry(occurrence_box, textvariable=self.field_vars["note"], width=34).grid(row=2, column=0, columnspan=2, sticky="ew", padx=2, pady=2)
-        occurrence_box.columnconfigure(1, weight=1)
+        tk.Label(occurrence_box, text="Use esta area para falta, feriado e observacao.", bg="#fff7ed", fg="#7c2d12", font=("Arial", 9, "bold")).grid(row=0, column=0, columnspan=3, sticky="w", padx=2, pady=(0, 6))
+        tk.Button(occurrence_box, text="Dia normal", command=self.mark_occurrence_normal, width=12).grid(row=1, column=0, sticky="ew", padx=2, pady=2)
+        tk.Button(occurrence_box, text="Marcar falta", command=self.mark_occurrence_absence, width=12).grid(row=1, column=1, sticky="ew", padx=2, pady=2)
+        tk.Button(occurrence_box, text="Marcar feriado", command=self.mark_occurrence_holiday, width=13).grid(row=1, column=2, sticky="ew", padx=2, pady=2)
+        tk.Checkbutton(occurrence_box, text="Falta", variable=self.field_vars["absence"], bg="#fff7ed", font=("Arial", 10, "bold")).grid(row=2, column=0, sticky="w", padx=2, pady=3)
+        tk.Checkbutton(occurrence_box, text="Feriado", variable=self.field_vars["holiday"], bg="#fff7ed", font=("Arial", 10, "bold")).grid(row=2, column=1, sticky="w", padx=10, pady=3)
+        tk.Label(occurrence_box, text="Observacao", bg="#fff7ed", font=("Arial", 9, "bold")).grid(row=3, column=0, columnspan=3, sticky="w", padx=2, pady=(8, 2))
+        tk.Entry(occurrence_box, textvariable=self.field_vars["note"], width=42, bg="#fffef3").grid(row=4, column=0, columnspan=3, sticky="ew", padx=2, pady=2)
+        for col in range(3):
+            occurrence_box.columnconfigure(col, weight=1)
 
         totals_box = tk.LabelFrame(edit, text="Totais calculados", bg="#ffffff", fg="#1f2933", font=("Arial", 10, "bold"), padx=8, pady=8)
         totals_box.grid(row=0, column=2, sticky="nsew", padx=(6, 0))
@@ -1256,6 +1273,7 @@ class PontoDesktop(tk.Tk):
         for key, value in mapping.items():
             self.field_vars[key].set("" if value is None else value)
         self.field_vars["absence"].set((row["absence"] or "").upper() == "S")
+        self.field_vars["holiday"].set((row["holiday"] or "").upper() == "S")
 
     def clear_form(self):
         self.selected_entry_id = None
@@ -1265,6 +1283,18 @@ class PontoDesktop(tk.Tk):
             else:
                 variable.set("")
         self.field_vars["expected"].set("0:00")
+
+    def mark_occurrence_normal(self):
+        self.field_vars["absence"].set(False)
+        self.field_vars["holiday"].set(False)
+
+    def mark_occurrence_absence(self):
+        self.field_vars["absence"].set(True)
+        self.field_vars["holiday"].set(False)
+
+    def mark_occurrence_holiday(self):
+        self.field_vars["holiday"].set(True)
+        self.field_vars["absence"].set(False)
 
     def show_hour_bank(self):
         self.clear()
@@ -1708,6 +1738,7 @@ class PontoDesktop(tk.Tk):
             round(credit / 60, 2),
             round(debit / 60, 2),
             "S" if self.field_vars["absence"].get() else None,
+            "S" if self.field_vars["holiday"].get() else None,
             self.field_vars["note"].get(),
         )
 
@@ -1718,7 +1749,7 @@ class PontoDesktop(tk.Tk):
                 SET employee_id=?, work_date=?, day=?, month=?, year=?,
                     entrada1=?, saida1=?, entrada2=?, saida2=?, entrada3=?, saida3=?, entrada4=?, saida4=?,
                     expected_hours=?, worked_hours=?, credit_hours=?, debit_hours=?,
-                    credit_decimal=?, debit_decimal=?, absence=?, note=?
+                    credit_decimal=?, debit_decimal=?, absence=?, holiday=?, note=?
                 WHERE id=?
                 """,
                 values + (self.selected_entry_id,),
@@ -1730,8 +1761,8 @@ class PontoDesktop(tk.Tk):
                     employee_id, work_date, day, month, year,
                     entrada1, saida1, entrada2, saida2, entrada3, saida3, entrada4, saida4,
                     expected_hours, worked_hours, credit_hours, debit_hours,
-                    credit_decimal, debit_decimal, absence, note
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    credit_decimal, debit_decimal, absence, holiday, note
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 values,
             )

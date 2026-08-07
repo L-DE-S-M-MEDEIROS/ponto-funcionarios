@@ -1,11 +1,11 @@
 ﻿{
-    "version":  "26.08.14",
+    "version":  "26.08.15",
     "author":  "L DE S M MEDEIROS",
     "type":  "installer",
-    "url":  "https://github.com/L-DE-S-M-MEDEIROS/ponto-funcionarios/releases/download/v26.08.14/Instalador.Ponto.Funcionarios.exe",
-    "sha256":  "d1760ec063bbccf5087c7a3edd3939d665cc226535d53c2205f27f9492b271c4",
-    "title":  "Versao 26.08.14",
-    "description":  "Melhora a tela de edicao de horarios e ocorrencias, separando Dia, Ocorrencias, Horarios e Totais.",
+    "url":  "https://github.com/L-DE-S-M-MEDEIROS/ponto-funcionarios/releases/download/v26.08.15/Instalador.Ponto.Funcionarios.exe",
+    "sha256":  "3b7e39c22666027ed769d829b33c13fb5b40017aaf89b8f3d65061faa36644f6",
+    "title":  "Versao 26.08.15",
+    "description":  "Facilita a edicao de ocorrencias com botoes Dia normal, Marcar falta e Marcar feriado, e corrige o salvamento do campo feriado.",
     "publishedAt":  "2026-08-07",
     "critical":  false
 }
