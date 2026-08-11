@@ -1,11 +1,11 @@
 ﻿{
-    "version":  "26.08.17",
+    "version":  "26.08.18",
     "author":  "L DE S M MEDEIROS",
     "type":  "installer",
-    "url":  "https://github.com/L-DE-S-M-MEDEIROS/ponto-funcionarios/releases/download/v26.08.17/Instalador.Ponto.Funcionarios.exe",
-    "sha256":  "085161f2a31d7843f20b6de6c36379d347f596ee2c3079b0ae830f80d42bb50b",
-    "title":  "Versao 26.08.17",
-    "description":  "Adiciona conferencia diaria, cadastro em abas e resumo detalhado da importacao do relogio.",
+    "url":  "https://github.com/L-DE-S-M-MEDEIROS/ponto-funcionarios/releases/download/v26.08.18/Instalador.Ponto.Funcionarios.exe",
+    "sha256":  "ca3a7b32fae11998ea5bc89a8b375ba7d19dbacb7ff32e588a87d13dad9acb1a",
+    "title":  "Versao 26.08.18",
+    "description":  "Adiciona tema claro premium, tema escuro grafite e padronizacao visual das telas principais.",
     "publishedAt":  "2026-08-11",
     "critical":  false
 }

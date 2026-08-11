@@ -18,7 +18,7 @@ else:
     APP_DIR = Path(__file__).resolve().parent
 DB_PATH = APP_DIR / "data" / "ponto_funcionarios.db"
 CONFIG_PATH = APP_DIR / "config.json"
-APP_VERSION = "26.08.17"
+APP_VERSION = "26.08.18"
 UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/L-DE-S-M-MEDEIROS/ponto-funcionarios/main/version.json"
 
 DEFAULT_CONFIG = {
@@ -29,7 +29,10 @@ DEFAULT_CONFIG = {
         "dbname": "ponto_funcionarios",
         "user": "ponto_app",
         "password": "",
-    }
+    },
+    "appearance": {
+        "theme": "light",
+    },
 }
 
 
@@ -47,6 +50,59 @@ MONTHS = [
     ("11", "Novembro"),
     ("12", "Dezembro"),
 ]
+
+THEMES = {
+    "light": {
+        "name": "Light Mode limpo",
+        "bg": "#f7f6f1",
+        "surface": "#ffffff",
+        "surface_alt": "#f1f3ec",
+        "header": "#52623f",
+        "accent": "#6f7f4f",
+        "accent_alt": "#2f6f63",
+        "text": "#202124",
+        "muted": "#667085",
+        "border": "#d8ddd0",
+        "input": "#fffdf5",
+        "input_accent": "#fff4b8",
+        "success_bg": "#e9f5e4",
+        "success_fg": "#335a2e",
+        "warning_bg": "#fff3d6",
+        "warning_fg": "#8a5a00",
+        "danger_bg": "#ffe5e2",
+        "danger_fg": "#9f2a22",
+        "button": "#ffffff",
+        "button_hover": "#eef2e7",
+        "button_fg": "#202124",
+        "clock_bg": "#fff6b8",
+        "clock_fg": "#161616",
+    },
+    "dark": {
+        "name": "Dark Mode grafite",
+        "bg": "#101418",
+        "surface": "#171c22",
+        "surface_alt": "#202731",
+        "header": "#101820",
+        "accent": "#00a7ff",
+        "accent_alt": "#22d3ee",
+        "text": "#f4f7fb",
+        "muted": "#aab4c0",
+        "border": "#2f3944",
+        "input": "#202731",
+        "input_accent": "#14384d",
+        "success_bg": "#133322",
+        "success_fg": "#9ff0bd",
+        "warning_bg": "#3a2c12",
+        "warning_fg": "#ffd68a",
+        "danger_bg": "#3d1f24",
+        "danger_fg": "#ffb4b4",
+        "button": "#202731",
+        "button_hover": "#263241",
+        "button_fg": "#f4f7fb",
+        "clock_bg": "#09283a",
+        "clock_fg": "#7de3ff",
+    },
+}
 
 
 class AppConnection:
@@ -98,10 +154,13 @@ class PontoDesktop(tk.Tk):
         self.title("SISTEMA_CONTROLE_DE_PONTO - BOLSAS BABY")
         self.geometry("1160x720")
         self.minsize(1060, 650)
-        self.configure(bg="#eeeeee")
         self.selected_entry_id = None
 
         self.app_config = load_app_config()
+        self.theme_name = self.app_config.get("appearance", {}).get("theme", "light")
+        self.theme = THEMES.get(self.theme_name, THEMES["light"])
+        self.apply_ttk_style()
+        self.configure(bg=self.theme["bg"])
         self.conn = self.open_database()
         self.ensure_schema()
         self.create_menu()
@@ -324,12 +383,63 @@ class PontoDesktop(tk.Tk):
         sistema.add_command(label="Histórico de alterações", command=self.show_audit_log)
         sistema.add_command(label="Buscar atualizações", command=self.check_updates)
         sistema.add_command(label="Cópia de segurança", command=self.backup_info)
+        tema = tk.Menu(sistema, tearoff=False)
+        tema.add_command(label="Light Mode limpo", command=lambda: self.set_theme("light"))
+        tema.add_command(label="Dark Mode grafite", command=lambda: self.set_theme("dark"))
+        sistema.add_cascade(label="Aparência", menu=tema)
         sistema.add_separator()
         sistema.add_command(label="Sobre", command=self.about)
         menu.add_cascade(label="Sistema", menu=sistema)
 
         menu.add_command(label="Sair", command=self.destroy)
         self.config(menu=menu)
+
+    def apply_ttk_style(self):
+        theme = self.theme
+        style = ttk.Style(self)
+        try:
+            style.theme_use("clam")
+        except tk.TclError:
+            pass
+        style.configure(".", font=("Segoe UI", 10), background=theme["bg"], foreground=theme["text"])
+        style.configure("Treeview", background=theme["surface"], fieldbackground=theme["surface"], foreground=theme["text"], rowheight=27, bordercolor=theme["border"], borderwidth=1)
+        style.configure("Treeview.Heading", background=theme["surface_alt"], foreground=theme["text"], font=("Segoe UI", 9, "bold"), relief="flat")
+        style.map("Treeview", background=[("selected", theme["accent"])], foreground=[("selected", "#ffffff")])
+        style.configure("TCombobox", fieldbackground=theme["input"], background=theme["surface_alt"], foreground=theme["text"], arrowcolor=theme["accent"])
+        style.configure("TNotebook", background=theme["bg"], borderwidth=0)
+        style.configure("TNotebook.Tab", background=theme["surface_alt"], foreground=theme["muted"], padding=(14, 8), font=("Segoe UI", 9, "bold"))
+        style.map("TNotebook.Tab", background=[("selected", theme["surface"])], foreground=[("selected", theme["text"])])
+
+    def set_theme(self, theme_name):
+        self.theme_name = theme_name if theme_name in THEMES else "light"
+        self.theme = THEMES[self.theme_name]
+        self.app_config.setdefault("appearance", {})["theme"] = self.theme_name
+        save_app_config(self.app_config)
+        self.apply_ttk_style()
+        self.show_home()
+
+    def button_style(self, kind="secondary"):
+        theme = self.theme
+        if kind == "primary":
+            return {"bg": theme["accent"], "fg": "#ffffff", "activebackground": theme["accent_alt"], "activeforeground": "#ffffff"}
+        if kind == "danger":
+            return {"bg": theme["danger_bg"], "fg": theme["danger_fg"], "activebackground": theme["danger_bg"], "activeforeground": theme["danger_fg"]}
+        return {"bg": theme["button"], "fg": theme["button_fg"], "activebackground": theme["button_hover"], "activeforeground": theme["button_fg"]}
+
+    def modern_button(self, parent, text, command, kind="secondary", **kwargs):
+        opts = self.button_style(kind)
+        opts.update({
+            "text": text,
+            "command": command,
+            "relief": "flat",
+            "bd": 0,
+            "font": ("Segoe UI", 10, "bold"),
+            "padx": 12,
+            "pady": 8,
+            "cursor": "hand2",
+        })
+        opts.update(kwargs)
+        return tk.Button(parent, **opts)
 
     def create_menu_old(self):
         menu = tk.Menu(self, tearoff=False)
@@ -438,36 +548,37 @@ class PontoDesktop(tk.Tk):
 
     def show_home(self):
         self.clear()
-        self.configure(bg="#f3f6f8")
+        theme = self.theme
+        self.configure(bg=theme["bg"])
         self.selected_entry_id = None
 
-        root = tk.Frame(self, bg="#f3f6f8")
+        root = tk.Frame(self, bg=theme["bg"])
         root.pack(fill="both", expand=True)
         root.columnconfigure(0, weight=1)
         root.rowconfigure(2, weight=1)
 
-        header = tk.Frame(root, bg="#0b7285", height=86)
+        header = tk.Frame(root, bg=theme["header"], height=94)
         header.grid(row=0, column=0, sticky="ew")
         header.grid_propagate(False)
         header.columnconfigure(0, weight=1)
-        tk.Label(header, text="Ponto Funcionários", bg="#0b7285", fg="white", font=("Arial", 24, "bold")).grid(row=0, column=0, sticky="w", padx=22, pady=(13, 0))
-        tk.Label(header, text=f"BOLSAS BABY  |  Versão {APP_VERSION}", bg="#0b7285", fg="#d9f5f8", font=("Arial", 10, "bold")).grid(row=1, column=0, sticky="w", padx=22)
+        tk.Label(header, text="Ponto Funcionários", bg=theme["header"], fg="white", font=("Segoe UI", 25, "bold")).grid(row=0, column=0, sticky="w", padx=24, pady=(15, 0))
+        tk.Label(header, text=f"BOLSAS BABY  |  Versão {APP_VERSION}  |  {theme['name']}", bg=theme["header"], fg=theme["muted"] if self.theme_name == "dark" else "#edf5e8", font=("Segoe UI", 10, "bold")).grid(row=1, column=0, sticky="w", padx=24)
 
         self.clock_var = tk.StringVar()
-        clock_box = tk.Frame(header, bg="#0b7285")
-        clock_box.grid(row=0, column=1, rowspan=2, sticky="e", padx=22)
-        tk.Button(clock_box, text="?", width=3, command=self.about, fg="white", bg="#4154b3", activebackground="#34439a", font=("Arial", 11, "bold"), relief="flat").pack(side="left", padx=(0, 10))
-        tk.Label(clock_box, textvariable=self.clock_var, bg="#fffaa3", fg="#111111", font=("Arial", 24, "bold"), bd=1, relief="solid", padx=10).pack(side="left")
+        clock_box = tk.Frame(header, bg=theme["header"])
+        clock_box.grid(row=0, column=1, rowspan=2, sticky="e", padx=24)
+        self.modern_button(clock_box, "?", self.about, "primary", width=3).pack(side="left", padx=(0, 10))
+        tk.Label(clock_box, textvariable=self.clock_var, bg=theme["clock_bg"], fg=theme["clock_fg"], font=("Segoe UI", 24, "bold"), bd=0, relief="flat", padx=14, pady=2).pack(side="left")
         self.update_clock()
 
-        content = tk.Frame(root, bg="#f3f6f8")
-        content.grid(row=1, column=0, sticky="nsew", padx=18, pady=18)
+        content = tk.Frame(root, bg=theme["bg"])
+        content.grid(row=1, column=0, sticky="nsew", padx=24, pady=24)
         content.columnconfigure((0, 1, 2), weight=1)
 
         db_text = self.database_status_text()
-        db_color = "#dcfce7" if getattr(self.conn, "kind", "local") == "postgres" else "#fff7ed"
-        db_fg = "#166534" if getattr(self.conn, "kind", "local") == "postgres" else "#9a3412"
-        tk.Label(content, text=db_text, bg=db_color, fg=db_fg, font=("Arial", 11, "bold"), anchor="w", padx=12, pady=8).grid(row=0, column=0, columnspan=3, sticky="ew", pady=(0, 12))
+        db_color = theme["success_bg"] if getattr(self.conn, "kind", "local") == "postgres" else theme["warning_bg"]
+        db_fg = theme["success_fg"] if getattr(self.conn, "kind", "local") == "postgres" else theme["warning_fg"]
+        tk.Label(content, text=db_text, bg=db_color, fg=db_fg, font=("Segoe UI", 11, "bold"), anchor="w", padx=16, pady=10).grid(row=0, column=0, columnspan=3, sticky="ew", pady=(0, 16))
 
         self.home_section(content, "Lançamentos", 0, [
             ("Consultar / editar ponto", "Editar batidas, faltas, débitos e créditos", self.show_manual_point, "#0b7285"),
@@ -477,8 +588,8 @@ class PontoDesktop(tk.Tk):
             ("Funcionários", "Consultar cadastros e códigos do relógio", self.show_employees, "#475569"),
         ])
         self.home_section(content, "Relatórios", 1, [
-            ("Espelho individual", "Gerar PDF do funcionário selecionado", self.show_manual_point, "#7c3aed"),
-            ("Todos os espelhos", "PDF único, um funcionário por página", self.show_manual_point, "#7c3aed"),
+            ("Espelho individual", "Gerar PDF do funcionário selecionado", self.export_individual_pdf, "#7c3aed"),
+            ("Todos os espelhos", "PDF único, um funcionário por página", self.export_all_point_pdf, "#7c3aed"),
             ("Banco de horas", "Resumo anual e PDF de saldos", self.show_hour_bank, "#b45309"),
         ])
         self.home_section(content, "Sistema", 2, [
@@ -521,30 +632,25 @@ class PontoDesktop(tk.Tk):
         self.bind("<F5>", lambda _event: self.destroy())
 
     def home_section(self, parent, title, column, actions):
-        section = tk.Frame(parent, bg="white", highlightbackground="#d6dde3", highlightthickness=1)
-        section.grid(row=1, column=column, sticky="nsew", padx=8)
+        theme = self.theme
+        section = tk.Frame(parent, bg=theme["surface"], highlightbackground=theme["border"], highlightthickness=1)
+        section.grid(row=1, column=column, sticky="nsew", padx=10)
         section.columnconfigure(0, weight=1)
 
-        tk.Label(section, text=title, bg="white", fg="#1f2933", font=("Arial", 15, "bold")).grid(row=0, column=0, sticky="w", padx=16, pady=(14, 8))
+        tk.Label(section, text=title, bg=theme["surface"], fg=theme["text"], font=("Segoe UI", 16, "bold")).grid(row=0, column=0, sticky="w", padx=18, pady=(18, 10))
         for index, (label, detail, command, color) in enumerate(actions, start=1):
-            button = tk.Button(
+            button = self.modern_button(
                 section,
-                text=f"{label}\n{detail}",
-                command=command,
+                f"{label}\n{detail}",
+                command,
                 anchor="w",
                 justify="left",
-                bg="#f8fafc",
-                fg="#111827",
-                activebackground="#eef4f8",
-                relief="flat",
-                bd=0,
-                padx=12,
-                pady=8,
-                font=("Arial", 10, "bold"),
+                padx=16,
+                pady=10,
             )
-            button.grid(row=index, column=0, sticky="ew", padx=12, pady=5)
+            button.grid(row=index, column=0, sticky="ew", padx=14, pady=6)
             marker = tk.Frame(section, bg=color, width=5, height=48)
-            marker.grid(row=index, column=0, sticky="w", padx=(12, 0), pady=5)
+            marker.grid(row=index, column=0, sticky="w", padx=(14, 0), pady=6)
 
     def home_button(self, parent, icon, text, command, row, column, width=18):
         button = tk.Button(
@@ -571,22 +677,23 @@ class PontoDesktop(tk.Tk):
 
     def show_manual_point(self):
         self.clear()
+        theme = self.theme
         self.selected_entry_id = None
 
-        root = tk.Frame(self, bg="#f3f6f8")
-        root.pack(fill="both", expand=True, padx=8, pady=8)
+        root = tk.Frame(self, bg=theme["bg"])
+        root.pack(fill="both", expand=True, padx=16, pady=16)
 
-        title = tk.Label(root, text="Lançamento e Conferência de Ponto", bg="#f3f6f8", fg="#1f2933", font=("Arial", 22, "bold"))
+        title = tk.Label(root, text="Lançamento e Conferência de Ponto", bg=theme["bg"], fg=theme["text"], font=("Segoe UI", 22, "bold"))
         title.grid(row=0, column=0, columnspan=4, sticky="w")
 
-        top_buttons = tk.Frame(root, bg="#f3f6f8")
+        top_buttons = tk.Frame(root, bg=theme["bg"])
         top_buttons.grid(row=0, column=4, columnspan=5, sticky="ew", padx=4)
-        tk.Button(top_buttons, text="Alinhar dias", command=self.not_ready, width=14).pack(side="left", padx=4)
-        tk.Button(top_buttons, text="Inserir almoço", command=self.insert_lunch, width=14).pack(side="left", padx=4)
-        tk.Button(top_buttons, text="Zerar saldo", command=self.zero_balance, width=14).pack(side="left", padx=4)
+        self.modern_button(top_buttons, "Alinhar dias", self.not_ready, width=14).pack(side="left", padx=4)
+        self.modern_button(top_buttons, "Inserir almoço", self.insert_lunch, width=14).pack(side="left", padx=4)
+        self.modern_button(top_buttons, "Zerar saldo", self.zero_balance, width=14).pack(side="left", padx=4)
 
-        form = tk.LabelFrame(root, text="Filtros do ponto", bg="#f3f6f8", fg="#1f2933", font=("Arial", 10, "bold"))
-        form.grid(row=1, column=0, columnspan=7, sticky="ew", pady=4)
+        form = tk.LabelFrame(root, text="Filtros do ponto", bg=theme["bg"], fg=theme["text"], font=("Segoe UI", 10, "bold"), bd=1, relief="solid")
+        form.grid(row=1, column=0, columnspan=7, sticky="ew", pady=8)
         form.columnconfigure(0, weight=1)
 
         self.employee_var = tk.StringVar()
@@ -594,7 +701,7 @@ class PontoDesktop(tk.Tk):
         self.employee_combo.grid(row=0, column=0, sticky="ew", padx=6, pady=6)
         self.employee_combo.bind("<<ComboboxSelected>>", lambda _event: self.load_entries())
 
-        tk.Label(form, text="Ativo\nN", bg="#eeeeee", font=("Arial", 9, "bold")).grid(row=0, column=1, padx=4)
+        tk.Label(form, text="Ativo\nN", bg=theme["bg"], fg=theme["muted"], font=("Segoe UI", 9, "bold")).grid(row=0, column=1, padx=4)
 
         self.store_var = tk.StringVar(value="TODOS")
         self.month_var = tk.StringVar(value=str(date.today().month))
@@ -627,33 +734,33 @@ class PontoDesktop(tk.Tk):
             "note": tk.StringVar(),
         }
 
-        edit = tk.LabelFrame(root, text="Editar dia selecionado", bg="#f3f6f8", fg="#1f2933", font=("Arial", 11, "bold"), padx=8, pady=8)
-        edit.grid(row=2, column=0, columnspan=7, sticky="ew", pady=(6, 2))
+        edit = tk.LabelFrame(root, text="Editar dia selecionado", bg=theme["bg"], fg=theme["text"], font=("Segoe UI", 11, "bold"), padx=12, pady=12, bd=1, relief="solid")
+        edit.grid(row=2, column=0, columnspan=7, sticky="ew", pady=(10, 4))
         edit.columnconfigure(0, weight=1)
         edit.columnconfigure(1, weight=1)
         edit.columnconfigure(2, weight=1)
 
-        day_box = tk.LabelFrame(edit, text="Dia", bg="#ffffff", fg="#1f2933", font=("Arial", 10, "bold"), padx=8, pady=8)
+        day_box = tk.LabelFrame(edit, text="Dia", bg=theme["surface"], fg=theme["text"], font=("Segoe UI", 10, "bold"), padx=10, pady=10)
         day_box.grid(row=0, column=0, sticky="nsew", padx=(0, 6))
         for col in range(2):
             day_box.columnconfigure(col, weight=1)
         self.small_field(day_box, "Dia do mes", "day", 0, 0, 10, bg="#fff8b8")
         self.small_field(day_box, "Semana", "week", 0, 1, 12)
 
-        occurrence_box = tk.LabelFrame(edit, text="Ocorrencias do dia", bg="#fff7ed", fg="#9a3412", font=("Arial", 10, "bold"), padx=8, pady=8)
+        occurrence_box = tk.LabelFrame(edit, text="Ocorrencias do dia", bg=theme["warning_bg"], fg=theme["warning_fg"], font=("Segoe UI", 10, "bold"), padx=10, pady=10)
         occurrence_box.grid(row=0, column=1, sticky="nsew", padx=6)
-        tk.Label(occurrence_box, text="Use esta area para falta, feriado e observacao.", bg="#fff7ed", fg="#7c2d12", font=("Arial", 9, "bold")).grid(row=0, column=0, columnspan=3, sticky="w", padx=2, pady=(0, 6))
-        tk.Button(occurrence_box, text="Dia normal", command=self.mark_occurrence_normal, width=12).grid(row=1, column=0, sticky="ew", padx=2, pady=2)
-        tk.Button(occurrence_box, text="Marcar falta", command=self.mark_occurrence_absence, width=12).grid(row=1, column=1, sticky="ew", padx=2, pady=2)
-        tk.Button(occurrence_box, text="Marcar feriado", command=self.mark_occurrence_holiday, width=13).grid(row=1, column=2, sticky="ew", padx=2, pady=2)
-        tk.Checkbutton(occurrence_box, text="Falta", variable=self.field_vars["absence"], bg="#fff7ed", font=("Arial", 10, "bold")).grid(row=2, column=0, sticky="w", padx=2, pady=3)
-        tk.Checkbutton(occurrence_box, text="Feriado", variable=self.field_vars["holiday"], bg="#fff7ed", font=("Arial", 10, "bold")).grid(row=2, column=1, sticky="w", padx=10, pady=3)
-        tk.Label(occurrence_box, text="Observacao", bg="#fff7ed", font=("Arial", 9, "bold")).grid(row=3, column=0, columnspan=3, sticky="w", padx=2, pady=(8, 2))
-        tk.Entry(occurrence_box, textvariable=self.field_vars["note"], width=42, bg="#fffef3").grid(row=4, column=0, columnspan=3, sticky="ew", padx=2, pady=2)
+        tk.Label(occurrence_box, text="Use esta area para falta, feriado e observacao.", bg=theme["warning_bg"], fg=theme["warning_fg"], font=("Segoe UI", 9, "bold")).grid(row=0, column=0, columnspan=3, sticky="w", padx=2, pady=(0, 6))
+        self.modern_button(occurrence_box, "Dia normal", self.mark_occurrence_normal, width=12).grid(row=1, column=0, sticky="ew", padx=3, pady=3)
+        self.modern_button(occurrence_box, "Marcar falta", self.mark_occurrence_absence, width=12).grid(row=1, column=1, sticky="ew", padx=3, pady=3)
+        self.modern_button(occurrence_box, "Marcar feriado", self.mark_occurrence_holiday, width=13).grid(row=1, column=2, sticky="ew", padx=3, pady=3)
+        tk.Checkbutton(occurrence_box, text="Falta", variable=self.field_vars["absence"], bg=theme["warning_bg"], fg=theme["warning_fg"], selectcolor=theme["surface"], activebackground=theme["warning_bg"], font=("Segoe UI", 10, "bold")).grid(row=2, column=0, sticky="w", padx=2, pady=3)
+        tk.Checkbutton(occurrence_box, text="Feriado", variable=self.field_vars["holiday"], bg=theme["warning_bg"], fg=theme["warning_fg"], selectcolor=theme["surface"], activebackground=theme["warning_bg"], font=("Segoe UI", 10, "bold")).grid(row=2, column=1, sticky="w", padx=10, pady=3)
+        tk.Label(occurrence_box, text="Observacao", bg=theme["warning_bg"], fg=theme["warning_fg"], font=("Segoe UI", 9, "bold")).grid(row=3, column=0, columnspan=3, sticky="w", padx=2, pady=(8, 2))
+        tk.Entry(occurrence_box, textvariable=self.field_vars["note"], width=42, bg=theme["input"], fg=theme["text"], insertbackground=theme["text"], relief="flat").grid(row=4, column=0, columnspan=3, sticky="ew", padx=2, pady=2)
         for col in range(3):
             occurrence_box.columnconfigure(col, weight=1)
 
-        totals_box = tk.LabelFrame(edit, text="Totais calculados", bg="#ffffff", fg="#1f2933", font=("Arial", 10, "bold"), padx=8, pady=8)
+        totals_box = tk.LabelFrame(edit, text="Totais calculados", bg=theme["surface"], fg=theme["text"], font=("Segoe UI", 10, "bold"), padx=10, pady=10)
         totals_box.grid(row=0, column=2, sticky="nsew", padx=(6, 0))
         for col in range(5):
             totals_box.columnconfigure(col, weight=1)
@@ -663,7 +770,7 @@ class PontoDesktop(tk.Tk):
         self.small_field(totals_box, "Debito", "debit", 0, 3, 9, bg="#ffd6d6")
         self.small_field(totals_box, "Adicional", "night", 0, 4, 9, bg="#d8fbff")
 
-        punches_box = tk.LabelFrame(edit, text="Horarios / batidas", bg="#ffffff", fg="#1f2933", font=("Arial", 10, "bold"), padx=8, pady=8)
+        punches_box = tk.LabelFrame(edit, text="Horarios / batidas", bg=theme["surface"], fg=theme["text"], font=("Segoe UI", 10, "bold"), padx=10, pady=10)
         punches_box.grid(row=1, column=0, columnspan=3, sticky="ew", pady=(8, 0))
         for col in range(8):
             punches_box.columnconfigure(col, weight=1)
@@ -676,19 +783,19 @@ class PontoDesktop(tk.Tk):
         for idx, (label, key) in enumerate(punches):
             self.small_field(punches_box, label, key, 0, idx, 12)
 
-        side = tk.LabelFrame(root, text="Relatórios e consultas", bg="#f3f6f8", fg="#1f2933", font=("Arial", 10, "bold"))
+        side = tk.LabelFrame(root, text="Relatórios e consultas", bg=theme["bg"], fg=theme["text"], font=("Segoe UI", 10, "bold"), padx=4, pady=4)
         side.grid(row=1, column=7, rowspan=3, sticky="ns", padx=8)
-        tk.Button(side, text="Conferência diária", width=24, command=self.show_daily_conference).pack(pady=(8, 4), padx=8)
-        tk.Button(side, text="Pendências do mês", width=24, command=self.show_pending_points).pack(pady=(8, 4), padx=8)
-        tk.Button(side, text="Espelho individual", width=24, command=self.show_individual_conference).pack(pady=(8, 4), padx=8)
-        tk.Button(side, text="PDF ponto de todos", width=24, command=self.export_all_point_pdf).pack(pady=4, padx=8)
-        tk.Button(side, text="PDF ponto + banco horas", width=24, command=self.export_mass_reports_pdf).pack(pady=4, padx=8)
-        tk.Button(side, text="Fechamento mensal", width=24, command=self.show_month_closing).pack(pady=4, padx=8)
-        tk.Button(side, text="Conferir período", width=24, command=self.load_entries).pack(pady=(24, 4), padx=8)
-        tk.Button(side, text="Funcionários presentes", width=24, command=lambda: self.show_daily_conference("presentes")).pack(pady=4, padx=8)
-        tk.Button(side, text="Funcionários faltantes", width=24, command=lambda: self.show_daily_conference("faltantes")).pack(pady=4, padx=8)
+        self.modern_button(side, "Conferência diária", self.show_daily_conference, "primary", width=24).pack(pady=(8, 4), padx=8)
+        self.modern_button(side, "Pendências do mês", self.show_pending_points, width=24).pack(pady=(8, 4), padx=8)
+        self.modern_button(side, "Espelho individual", self.show_individual_conference, width=24).pack(pady=(8, 4), padx=8)
+        self.modern_button(side, "PDF ponto de todos", self.export_all_point_pdf, width=24).pack(pady=4, padx=8)
+        self.modern_button(side, "PDF ponto + banco horas", self.export_mass_reports_pdf, width=24).pack(pady=4, padx=8)
+        self.modern_button(side, "Fechamento mensal", self.show_month_closing, width=24).pack(pady=4, padx=8)
+        self.modern_button(side, "Conferir período", self.load_entries, width=24).pack(pady=(24, 4), padx=8)
+        self.modern_button(side, "Funcionários presentes", lambda: self.show_daily_conference("presentes"), width=24).pack(pady=4, padx=8)
+        self.modern_button(side, "Funcionários faltantes", lambda: self.show_daily_conference("faltantes"), width=24).pack(pady=4, padx=8)
 
-        tk.Label(root, text="Clique em uma linha da tabela para editar. Depois altere Dia, Ocorrencias ou Horarios acima e clique em Gravar alteracoes.", bg="#f3f6f8", fg="#334155", font=("Arial", 10, "bold")).grid(row=3, column=0, columnspan=7, sticky="w", pady=(6, 0))
+        tk.Label(root, text="Clique em uma linha da tabela para editar. Depois altere Dia, Ocorrencias ou Horarios acima e clique em Gravar alteracoes.", bg=theme["bg"], fg=theme["muted"], font=("Segoe UI", 10, "bold")).grid(row=3, column=0, columnspan=7, sticky="w", pady=(8, 0))
 
         columns = ("day", "entrada1", "saida1", "entrada2", "saida2", "entrada3", "saida3", "entrada4", "saida4", "expected", "worked", "note", "credit", "debit", "night", "store")
         self.tree = ttk.Treeview(root, columns=columns, show="headings", height=12)
@@ -702,13 +809,13 @@ class PontoDesktop(tk.Tk):
         root.rowconfigure(4, weight=1)
         root.columnconfigure(6, weight=1)
 
-        bottom = tk.Frame(root, bg="#eeeeee")
+        bottom = tk.Frame(root, bg=theme["bg"])
         bottom.grid(row=5, column=0, columnspan=8, sticky="ew", pady=4)
-        tk.Button(bottom, text="Gravar alteracoes (F1)", width=20, height=2, command=self.save_entry).pack(side="left", padx=3)
-        tk.Button(bottom, text="Novo lancamento (F2)", width=20, height=2, command=self.clear_form).pack(side="left", padx=3)
-        tk.Button(bottom, text="Limpar edicao (F3)", width=18, height=2, command=self.clear_form).pack(side="left", padx=3)
-        tk.Button(bottom, text="Excluir dia", width=14, height=2, command=self.delete_entry).pack(side="left", padx=3)
-        tk.Button(bottom, text="Voltar ao menu (F5)", width=18, height=2, command=self.show_home).pack(side="right", padx=3)
+        self.modern_button(bottom, "Gravar alteracoes (F1)", self.save_entry, "primary", width=20, height=2).pack(side="left", padx=4)
+        self.modern_button(bottom, "Novo lancamento (F2)", self.clear_form, width=20, height=2).pack(side="left", padx=4)
+        self.modern_button(bottom, "Limpar edicao (F3)", self.clear_form, width=18, height=2).pack(side="left", padx=4)
+        self.modern_button(bottom, "Excluir dia", self.delete_entry, "danger", width=14, height=2).pack(side="left", padx=4)
+        self.modern_button(bottom, "Voltar ao menu (F5)", self.show_home, width=18, height=2).pack(side="right", padx=4)
 
         self.bind("<F1>", lambda _event: self.save_entry())
         self.bind("<F2>", lambda _event: self.clear_form())
@@ -721,19 +828,27 @@ class PontoDesktop(tk.Tk):
         self.load_entries()
 
     def combo_block(self, parent, label, variable, values, col):
-        tk.Label(parent, text=label, bg="#eeeeee", font=("Arial", 10, "bold")).grid(row=0, column=col, sticky="sw")
+        theme = self.theme
+        bg_parent = parent.cget("bg") if "bg" in parent.keys() else theme["bg"]
+        tk.Label(parent, text=label, bg=bg_parent, fg=theme["text"], font=("Segoe UI", 10, "bold")).grid(row=0, column=col, sticky="sw")
         combo = ttk.Combobox(parent, textvariable=variable, values=values, state="readonly", width=12)
         combo.grid(row=1, column=col, sticky="ew", padx=4, pady=3)
         combo.bind("<<ComboboxSelected>>", lambda _event: self.load_entries())
 
     def entry_block(self, parent, label, variable, col, width=10, yellow=False):
-        tk.Label(parent, text=label, bg="#eeeeee", font=("Arial", 10, "bold")).grid(row=0, column=col, sticky="sw")
-        tk.Entry(parent, textvariable=variable, width=width, bg="#fff8b8" if yellow else "white").grid(row=1, column=col, sticky="ew", padx=4, pady=3)
+        theme = self.theme
+        bg_parent = parent.cget("bg") if "bg" in parent.keys() else theme["bg"]
+        tk.Label(parent, text=label, bg=bg_parent, fg=theme["text"], font=("Segoe UI", 10, "bold")).grid(row=0, column=col, sticky="sw")
+        tk.Entry(parent, textvariable=variable, width=width, bg=theme["input_accent"] if yellow else theme["input"], fg=theme["text"], insertbackground=theme["text"], relief="flat").grid(row=1, column=col, sticky="ew", padx=4, pady=3)
 
     def small_field(self, parent, label, key, row, col, width, bg="white"):
-        bg_parent = parent.cget("bg") if "bg" in parent.keys() else "#eeeeee"
-        tk.Label(parent, text=label, bg=bg_parent, font=("Arial", 9, "bold")).grid(row=row, column=col, sticky="w", padx=2)
-        tk.Entry(parent, textvariable=self.field_vars[key], width=width, bg=bg, font=("Arial", 10)).grid(row=row + 1, column=col, sticky="ew", padx=2, pady=2)
+        theme = self.theme
+        bg_parent = parent.cget("bg") if "bg" in parent.keys() else theme["bg"]
+        field_bg = bg if bg != "white" else theme["input"]
+        if self.theme_name == "dark" and bg != "white":
+            field_bg = theme["input_accent"]
+        tk.Label(parent, text=label, bg=bg_parent, fg=theme["text"], font=("Segoe UI", 9, "bold")).grid(row=row, column=col, sticky="w", padx=2)
+        tk.Entry(parent, textvariable=self.field_vars[key], width=width, bg=field_bg, fg=theme["text"], insertbackground=theme["text"], font=("Segoe UI", 10), relief="flat").grid(row=row + 1, column=col, sticky="ew", padx=2, pady=2)
 
     def employee_options(self):
         rows = self.conn.execute("SELECT id, name FROM employees ORDER BY name").fetchall()
@@ -1365,40 +1480,41 @@ class PontoDesktop(tk.Tk):
 
     def show_hour_bank(self):
         self.clear()
-        self.configure(bg="#eeeeee")
+        theme = self.theme
+        self.configure(bg=theme["bg"])
 
-        root = tk.Frame(self, bg="#eeeeee")
-        root.pack(fill="both", expand=True, padx=10, pady=10)
+        root = tk.Frame(self, bg=theme["bg"])
+        root.pack(fill="both", expand=True, padx=16, pady=16)
         root.columnconfigure(0, weight=1)
         root.rowconfigure(2, weight=1)
 
-        header = tk.Frame(root, bg="#eeeeee")
+        header = tk.Frame(root, bg=theme["bg"])
         header.grid(row=0, column=0, sticky="ew")
-        tk.Label(header, text="Banco de Horas", bg="#eeeeee", fg="#666666", font=("Arial", 26, "bold")).pack(side="left")
+        tk.Label(header, text="Banco de Horas", bg=theme["bg"], fg=theme["text"], font=("Segoe UI", 26, "bold")).pack(side="left")
 
-        filters = tk.LabelFrame(root, text="Filtros", bg="#eeeeee", font=("Arial", 10, "bold"))
-        filters.grid(row=1, column=0, sticky="ew", pady=(8, 6))
+        filters = tk.LabelFrame(root, text="Filtros", bg=theme["bg"], fg=theme["text"], font=("Segoe UI", 10, "bold"), padx=10, pady=8)
+        filters.grid(row=1, column=0, sticky="ew", pady=(12, 10))
         filters.columnconfigure(1, weight=1)
 
         self.bank_employee_var = tk.StringVar(value="TODOS")
         self.bank_year_var = tk.StringVar(value=str(date.today().year))
         employee_values = ["TODOS"] + self.employee_options()
 
-        tk.Label(filters, text="Funcionário", bg="#eeeeee", font=("Arial", 10, "bold")).grid(row=0, column=0, sticky="w", padx=6)
+        tk.Label(filters, text="Funcionário", bg=theme["bg"], fg=theme["text"], font=("Segoe UI", 10, "bold")).grid(row=0, column=0, sticky="w", padx=6)
         employee_combo = ttk.Combobox(filters, textvariable=self.bank_employee_var, values=employee_values, state="readonly")
         employee_combo.grid(row=1, column=0, columnspan=2, sticky="ew", padx=6, pady=4)
         employee_combo.bind("<<ComboboxSelected>>", lambda _event: self.load_hour_bank())
 
-        tk.Label(filters, text="Ano", bg="#eeeeee", font=("Arial", 10, "bold")).grid(row=0, column=2, sticky="w", padx=6)
-        year_entry = tk.Entry(filters, textvariable=self.bank_year_var, width=8, bg="#fff8b8")
+        tk.Label(filters, text="Ano", bg=theme["bg"], fg=theme["text"], font=("Segoe UI", 10, "bold")).grid(row=0, column=2, sticky="w", padx=6)
+        year_entry = tk.Entry(filters, textvariable=self.bank_year_var, width=8, bg=theme["input_accent"], fg=theme["text"], insertbackground=theme["text"], relief="flat")
         year_entry.grid(row=1, column=2, sticky="w", padx=6, pady=4)
         year_entry.bind("<Return>", lambda _event: self.load_hour_bank())
 
-        tk.Button(filters, text="Atualizar", width=12, command=self.load_hour_bank).grid(row=1, column=3, padx=6, pady=4)
-        tk.Button(filters, text="Gerar PDF", width=12, command=self.export_hour_bank_pdf).grid(row=1, column=4, padx=6, pady=4)
-        tk.Button(filters, text="Voltar", width=12, command=self.show_home).grid(row=1, column=5, padx=6, pady=4)
+        self.modern_button(filters, "Atualizar", self.load_hour_bank, width=12).grid(row=1, column=3, padx=6, pady=4)
+        self.modern_button(filters, "Gerar PDF", self.export_hour_bank_pdf, "primary", width=12).grid(row=1, column=4, padx=6, pady=4)
+        self.modern_button(filters, "Voltar", self.show_home, width=12).grid(row=1, column=5, padx=6, pady=4)
 
-        table_frame = tk.Frame(root, bg="#eeeeee")
+        table_frame = tk.Frame(root, bg=theme["bg"])
         table_frame.grid(row=2, column=0, sticky="nsew")
         table_frame.columnconfigure(0, weight=1)
         table_frame.rowconfigure(0, weight=1)
@@ -1417,12 +1533,12 @@ class PontoDesktop(tk.Tk):
         y_scroll.grid(row=0, column=1, sticky="ns")
         self.hour_bank_tree.configure(yscrollcommand=y_scroll.set)
 
-        self.hour_bank_tree.tag_configure("credit", background="#e8ffe8")
-        self.hour_bank_tree.tag_configure("debit", background="#ffe8e8")
-        self.hour_bank_tree.tag_configure("balance", background="#eef4ff", font=("Arial", 9, "bold"))
+        self.hour_bank_tree.tag_configure("credit", background=theme["success_bg"], foreground=theme["success_fg"])
+        self.hour_bank_tree.tag_configure("debit", background=theme["danger_bg"], foreground=theme["danger_fg"])
+        self.hour_bank_tree.tag_configure("balance", background=theme["surface_alt"], foreground=theme["text"], font=("Segoe UI", 9, "bold"))
 
         self.bank_summary_var = tk.StringVar()
-        tk.Label(root, textvariable=self.bank_summary_var, bg="#eeeeee", fg="#222222", font=("Arial", 11, "bold")).grid(row=3, column=0, sticky="w", pady=(8, 0))
+        tk.Label(root, textvariable=self.bank_summary_var, bg=theme["bg"], fg=theme["text"], font=("Segoe UI", 11, "bold")).grid(row=3, column=0, sticky="w", pady=(10, 0))
 
         self.bind("<F5>", lambda _event: self.show_home())
         self.load_hour_bank()
@@ -1923,24 +2039,25 @@ class PontoDesktop(tk.Tk):
 
     def show_employees(self):
         self.clear()
-        frame = tk.Frame(self, bg="#f3f6f8")
+        theme = self.theme
+        frame = tk.Frame(self, bg=theme["bg"])
         frame.pack(fill="both", expand=True, padx=12, pady=12)
         frame.columnconfigure(0, weight=1)
         frame.rowconfigure(2, weight=1)
 
-        header = tk.Frame(frame, bg="#f3f6f8")
+        header = tk.Frame(frame, bg=theme["bg"])
         header.grid(row=0, column=0, sticky="ew")
-        tk.Label(header, text="Funcionários", bg="#f3f6f8", fg="#1f2933", font=("Arial", 24, "bold")).pack(side="left")
-        tk.Button(header, text="Voltar ao menu", width=14, command=self.show_home).pack(side="right", padx=4)
-        tk.Button(header, text="Abrir ponto", width=12, command=lambda: open_selected_point()).pack(side="right", padx=4)
+        tk.Label(header, text="Funcionários", bg=theme["bg"], fg=theme["text"], font=("Segoe UI", 24, "bold")).pack(side="left")
+        self.modern_button(header, "Voltar ao menu", self.show_home, width=14).pack(side="right", padx=4)
+        self.modern_button(header, "Abrir ponto", lambda: open_selected_point(), "primary", width=12).pack(side="right", padx=4)
 
-        hint = tk.Label(frame, text="Selecione um funcionário para ver dados cadastrais, horários usados no cálculo e resumo do banco de horas.", bg="#e0f2fe", fg="#075985", anchor="w", padx=10, pady=7, font=("Arial", 10, "bold"))
+        hint = tk.Label(frame, text="Selecione um funcionário para ver dados cadastrais, horários usados no cálculo e resumo do banco de horas.", bg=theme["surface_alt"], fg=theme["muted"], anchor="w", padx=14, pady=9, font=("Segoe UI", 10, "bold"))
         hint.grid(row=1, column=0, sticky="ew", pady=(8, 10))
 
-        body = tk.PanedWindow(frame, orient="horizontal", bg="#f3f6f8", sashwidth=6)
+        body = tk.PanedWindow(frame, orient="horizontal", bg=theme["bg"], sashwidth=6)
         body.grid(row=2, column=0, sticky="nsew")
 
-        list_frame = tk.Frame(body, bg="#f3f6f8")
+        list_frame = tk.Frame(body, bg=theme["bg"])
         list_frame.columnconfigure(0, weight=1)
         list_frame.rowconfigure(0, weight=1)
         tree = ttk.Treeview(list_frame, columns=("id", "clock", "name", "department", "weekday", "sat", "tol"), show="headings")
@@ -1960,7 +2077,7 @@ class PontoDesktop(tk.Tk):
         scroll.grid(row=0, column=1, sticky="ns")
         tree.configure(yscrollcommand=scroll.set)
 
-        details = tk.Frame(body, bg="#f3f6f8")
+        details = tk.Frame(body, bg=theme["bg"])
         details.columnconfigure(0, weight=1)
         details.rowconfigure(0, weight=1)
         notebook = ttk.Notebook(details)
@@ -1985,10 +2102,10 @@ class PontoDesktop(tk.Tk):
         }
 
         def add_readonly(parent, label, key, row):
-            tk.Label(parent, text=label, bg="white", fg="#334155", font=("Arial", 9, "bold")).grid(row=row, column=0, sticky="w", padx=10, pady=(8, 2))
-            tk.Entry(parent, textvariable=vars_by_key[key], state="readonly", readonlybackground="#f8fafc").grid(row=row, column=1, sticky="ew", padx=10, pady=(8, 2))
+            tk.Label(parent, text=label, bg=theme["surface"], fg=theme["muted"], font=("Segoe UI", 9, "bold")).grid(row=row, column=0, sticky="w", padx=10, pady=(8, 2))
+            tk.Entry(parent, textvariable=vars_by_key[key], state="readonly", readonlybackground=theme["input"], fg=theme["text"], relief="flat").grid(row=row, column=1, sticky="ew", padx=10, pady=(8, 2))
 
-        data_tab = tk.Frame(notebook, bg="white")
+        data_tab = tk.Frame(notebook, bg=theme["surface"])
         data_tab.columnconfigure(1, weight=1)
         notebook.add(data_tab, text="Dados cadastrais")
         for index, (label, key) in enumerate([
@@ -2003,7 +2120,7 @@ class PontoDesktop(tk.Tk):
         ]):
             add_readonly(data_tab, label, key, index)
 
-        hours_tab = tk.Frame(notebook, bg="white")
+        hours_tab = tk.Frame(notebook, bg=theme["surface"])
         hours_tab.columnconfigure(1, weight=1)
         notebook.add(hours_tab, text="Horários e cálculo")
         for index, (label, key) in enumerate([
@@ -2013,12 +2130,12 @@ class PontoDesktop(tk.Tk):
             ("Tolerância em minutos", "tolerance_minutes"),
         ]):
             add_readonly(hours_tab, label, key, index)
-        tk.Label(hours_tab, text="Esses horários são usados para calcular crédito e débito quando o ponto é importado.", bg="#fff7ed", fg="#9a3412", anchor="w", justify="left", padx=10, pady=8, font=("Arial", 9, "bold")).grid(row=5, column=0, columnspan=2, sticky="ew", padx=10, pady=14)
+        tk.Label(hours_tab, text="Esses horários são usados para calcular crédito e débito quando o ponto é importado.", bg=theme["warning_bg"], fg=theme["warning_fg"], anchor="w", justify="left", padx=10, pady=8, font=("Segoe UI", 9, "bold")).grid(row=5, column=0, columnspan=2, sticky="ew", padx=10, pady=14)
 
-        summary_tab = tk.Frame(notebook, bg="white")
+        summary_tab = tk.Frame(notebook, bg=theme["surface"])
         summary_tab.columnconfigure(0, weight=1)
         notebook.add(summary_tab, text="Resumo de ponto")
-        tk.Label(summary_tab, textvariable=vars_by_key["summary"], bg="white", fg="#1f2933", justify="left", anchor="nw", font=("Arial", 11), padx=12, pady=12).grid(row=0, column=0, sticky="nsew")
+        tk.Label(summary_tab, textvariable=vars_by_key["summary"], bg=theme["surface"], fg=theme["text"], justify="left", anchor="nw", font=("Segoe UI", 11), padx=16, pady=16).grid(row=0, column=0, sticky="nsew")
 
         employees_by_id = {}
         for row in self.conn.execute("SELECT * FROM employees ORDER BY name"):
@@ -2322,29 +2439,30 @@ class PontoDesktop(tk.Tk):
         tk.Button(window, text="Fechar", width=12, command=window.destroy).pack(anchor="e", padx=10, pady=(0, 10))
 
     def show_daily_conference(self, initial_filter="todos"):
+        theme = self.theme
         window = tk.Toplevel(self)
         window.title("Conferencia diaria")
         window.geometry("1160x640")
-        window.configure(bg="#f3f6f8")
+        window.configure(bg=theme["bg"])
         window.transient(self)
         window.columnconfigure(0, weight=1)
         window.rowconfigure(2, weight=1)
 
-        header = tk.Frame(window, bg="#0b7285", height=70)
+        header = tk.Frame(window, bg=theme["header"], height=76)
         header.grid(row=0, column=0, sticky="ew")
         header.grid_propagate(False)
-        tk.Label(header, text="Conferência diária do ponto", bg="#0b7285", fg="white", font=("Arial", 18, "bold")).pack(anchor="w", padx=16, pady=(10, 0))
-        tk.Label(header, text="Veja quem está OK, faltando lançamento ou com batida incompleta antes de fechar o dia.", bg="#0b7285", fg="#d9f5f8", font=("Arial", 10, "bold")).pack(anchor="w", padx=16)
+        tk.Label(header, text="Conferência diária do ponto", bg=theme["header"], fg="white", font=("Segoe UI", 19, "bold")).pack(anchor="w", padx=20, pady=(12, 0))
+        tk.Label(header, text="Veja quem está OK, faltando lançamento ou com batida incompleta antes de fechar o dia.", bg=theme["header"], fg=theme["muted"] if self.theme_name == "dark" else "#edf5e8", font=("Segoe UI", 10, "bold")).pack(anchor="w", padx=20)
 
-        controls = tk.Frame(window, bg="#f3f6f8")
-        controls.grid(row=1, column=0, sticky="ew", padx=10, pady=10)
+        controls = tk.Frame(window, bg=theme["bg"])
+        controls.grid(row=1, column=0, sticky="ew", padx=16, pady=14)
         day_var = tk.StringVar(value=date.today().strftime("%d/%m/%Y"))
         filter_var = tk.StringVar(value=initial_filter if initial_filter in ("todos", "presentes", "faltantes", "problemas") else "todos")
         summary_var = tk.StringVar()
 
-        tk.Label(controls, text="Data", bg="#f3f6f8", font=("Arial", 10, "bold")).pack(side="left")
-        tk.Entry(controls, textvariable=day_var, width=12, bg="#fff8b8").pack(side="left", padx=6)
-        tk.Label(controls, text="Filtro", bg="#f3f6f8", font=("Arial", 10, "bold")).pack(side="left", padx=(12, 0))
+        tk.Label(controls, text="Data", bg=theme["bg"], fg=theme["text"], font=("Segoe UI", 10, "bold")).pack(side="left")
+        tk.Entry(controls, textvariable=day_var, width=12, bg=theme["input_accent"], fg=theme["text"], insertbackground=theme["text"], relief="flat").pack(side="left", padx=8, ipady=5)
+        tk.Label(controls, text="Filtro", bg=theme["bg"], fg=theme["text"], font=("Segoe UI", 10, "bold")).pack(side="left", padx=(12, 0))
         ttk.Combobox(controls, textvariable=filter_var, values=["todos", "presentes", "faltantes", "problemas"], state="readonly", width=13).pack(side="left", padx=6)
 
         columns = ("employee", "entrada1", "saida1", "entrada2", "saida2", "worked", "credit", "debit", "status", "note")
@@ -2355,10 +2473,10 @@ class PontoDesktop(tk.Tk):
             tree.heading(col, text=heading)
             tree.column(col, width=width, minwidth=width, stretch=col in ("employee", "note"))
         tree.grid(row=2, column=0, sticky="nsew", padx=10)
-        tree.tag_configure("ok", background="#ecfdf3")
-        tree.tag_configure("warning", background="#fff7ed")
-        tree.tag_configure("danger", background="#fee2e2")
-        tree.tag_configure("neutral", background="#f8fafc")
+        tree.tag_configure("ok", background=theme["success_bg"], foreground=theme["success_fg"])
+        tree.tag_configure("warning", background=theme["warning_bg"], foreground=theme["warning_fg"])
+        tree.tag_configure("danger", background=theme["danger_bg"], foreground=theme["danger_fg"])
+        tree.tag_configure("neutral", background=theme["surface_alt"], foreground=theme["muted"])
 
         def selected_day():
             try:
@@ -2406,10 +2524,10 @@ class PontoDesktop(tk.Tk):
             window.destroy()
             self.open_manual_point_for(employee_id, work_day.month, work_day.year, work_day.day)
 
-        tk.Button(controls, text="Atualizar", width=12, command=refresh).pack(side="left", padx=8)
-        tk.Button(controls, text="Abrir edição do dia", width=18, command=open_edit).pack(side="left", padx=4)
-        tk.Button(controls, text="Fechar", width=10, command=window.destroy).pack(side="right")
-        tk.Label(window, textvariable=summary_var, bg="#f3f6f8", fg="#334155", font=("Arial", 10, "bold"), anchor="w").grid(row=3, column=0, sticky="ew", padx=10, pady=8)
+        self.modern_button(controls, "Atualizar", refresh, width=12).pack(side="left", padx=8)
+        self.modern_button(controls, "Abrir edição do dia", open_edit, "primary", width=18).pack(side="left", padx=4)
+        self.modern_button(controls, "Fechar", window.destroy, width=10).pack(side="right")
+        tk.Label(window, textvariable=summary_var, bg=theme["bg"], fg=theme["muted"], font=("Segoe UI", 10, "bold"), anchor="w").grid(row=3, column=0, sticky="ew", padx=16, pady=10)
         refresh()
 
     def collect_daily_conference(self, work_day):
