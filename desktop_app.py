@@ -19,7 +19,7 @@ else:
     APP_DIR = Path(__file__).resolve().parent
 DB_PATH = APP_DIR / "data" / "ponto_funcionarios.db"
 CONFIG_PATH = APP_DIR / "config.json"
-APP_VERSION = "26.08.19"
+APP_VERSION = "26.08.20"
 UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/L-DE-S-M-MEDEIROS/ponto-funcionarios/main/version.json"
 
 DEFAULT_CONFIG = {
@@ -278,6 +278,18 @@ class PontoDesktop(tk.Tk):
                 )
                 """
             )
+            self.conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS hour_bank_initial_balances (
+                  employee_id INTEGER NOT NULL,
+                  year INTEGER NOT NULL,
+                  balance_minutes INTEGER NOT NULL DEFAULT 0,
+                  source TEXT,
+                  updated_at TEXT,
+                  PRIMARY KEY (employee_id, year)
+                )
+                """
+            )
             self.ensure_time_entry_columns()
             self.conn.commit()
             return
@@ -367,6 +379,18 @@ class PontoDesktop(tk.Tk):
               source TEXT,
               updated_at TEXT,
               PRIMARY KEY (employee_id, year, month)
+            )
+            """
+        )
+        self.conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS hour_bank_initial_balances (
+              employee_id INTEGER NOT NULL,
+              year INTEGER NOT NULL,
+              balance_minutes INTEGER NOT NULL DEFAULT 0,
+              source TEXT,
+              updated_at TEXT,
+              PRIMARY KEY (employee_id, year)
             )
             """
         )
@@ -1589,19 +1613,21 @@ class PontoDesktop(tk.Tk):
 
         annual_credit = 0
         annual_debit = 0
+        initial_balance = 0
         for employee in data["employees"]:
             credits = employee["credit"]
             debits = employee["debit"]
             balance = [credit - debit for credit, debit in zip(credits, debits)]
             annual_credit += sum(credits)
             annual_debit += sum(debits)
+            initial_balance += employee.get("initial_balance", 0)
             self.hour_bank_tree.insert("", "end", values=(employee["name"], "HORAS EXTRAS", *[format_minutes(value) for value in credits], format_minutes(sum(credits))), tags=("credit",))
             self.hour_bank_tree.insert("", "end", values=("", "HORAS FALTANTES", *[format_minutes(value) for value in debits], format_minutes(sum(debits))), tags=("debit",))
-            self.hour_bank_tree.insert("", "end", values=("", "TOTAL MÊS", *[format_minutes(value) for value in balance], format_minutes(sum(balance))), tags=("balance",))
+            self.hour_bank_tree.insert("", "end", values=("", "TOTAL MÊS", *[format_minutes(value) for value in balance], format_minutes(employee.get("initial_balance", 0) + sum(balance))), tags=("balance",))
 
-        final_balance = annual_credit - annual_debit
+        final_balance = initial_balance + annual_credit - annual_debit
         self.bank_summary_var.set(
-            f"Resumo {year}: extras {format_minutes(annual_credit)} | faltantes {format_minutes(annual_debit)} | saldo {format_minutes(final_balance)}"
+            f"Resumo {year}: saldo inicial {format_minutes(initial_balance)} | extras {format_minutes(annual_credit)} | faltantes {format_minutes(annual_debit)} | saldo final {format_minutes(final_balance)}"
         )
 
     def import_hour_bank_excel_file(self):
@@ -1663,6 +1689,18 @@ class PontoDesktop(tk.Tk):
             if not employee:
                 unknown_sheets.append(sheet.title)
                 continue
+            initial_balance = excel_duration_minutes(sheet["B3"].value)
+            self.conn.execute(
+                """
+                INSERT INTO hour_bank_initial_balances (employee_id, year, balance_minutes, source, updated_at)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT (employee_id, year)
+                DO UPDATE SET balance_minutes = excluded.balance_minutes,
+                              source = excluded.source,
+                              updated_at = excluded.updated_at
+                """,
+                (employee["id"], 2026, initial_balance, source, now),
+            )
             for month, (credit_cell, debit_cell) in month_cells.items():
                 credit_minutes = excel_duration_minutes(sheet[credit_cell].value)
                 debit_minutes = excel_duration_minutes(sheet[debit_cell].value)
@@ -1737,16 +1775,42 @@ class PontoDesktop(tk.Tk):
                 employee["debit"][month_index] = int(row["debit_minutes"] or 0)
                 employee["source"][month_index] = row["source"] or "excel"
 
+        balance_params = [year]
+        balance_clause = ""
+        if employee_filter and employee_filter != "TODOS":
+            balance_clause = "AND employee_id = ?"
+            balance_params.append(int(employee_filter.split(" - ", 1)[0]))
+        balances = self.conn.execute(
+            f"""
+            SELECT employee_id, balance_minutes, source
+            FROM hour_bank_initial_balances
+            WHERE year = ? {balance_clause}
+            """,
+            balance_params,
+        ).fetchall()
+        for row in balances:
+            employee = employees.get(row["employee_id"])
+            if employee:
+                employee["initial_balance"] = int(row["balance_minutes"] or 0)
+                employee["initial_source"] = row["source"] or "excel"
+
         employee_list = list(employees.values())
+        for employee in employee_list:
+            employee.setdefault("initial_balance", 0)
+            employee.setdefault("initial_source", "")
         annual_credit = sum(sum(employee["credit"]) for employee in employee_list)
         annual_debit = sum(sum(employee["debit"]) for employee in employee_list)
+        initial_balance = sum(employee["initial_balance"] for employee in employee_list)
+        period_balance = annual_credit - annual_debit
         return {
             "year": year,
             "employee_filter": employee_filter,
             "employees": employee_list,
+            "initial_balance": initial_balance,
             "annual_credit": annual_credit,
             "annual_debit": annual_debit,
-            "annual_balance": annual_credit - annual_debit,
+            "period_balance": period_balance,
+            "annual_balance": initial_balance + period_balance,
         }
 
     def export_hour_bank_pdf(self, data=None, open_after=True):
@@ -1805,27 +1869,31 @@ class PontoDesktop(tk.Tk):
 
         monthly_credit = [0] * 12
         monthly_debit = [0] * 12
+        initial_balance = data.get("initial_balance", 0)
         for employee in data["employees"]:
             monthly_credit = [total + value for total, value in zip(monthly_credit, employee["credit"])]
             monthly_debit = [total + value for total, value in zip(monthly_debit, employee["debit"])]
         monthly_balance = [credit - debit for credit, debit in zip(monthly_credit, monthly_debit)]
+        period_balance = data.get("period_balance", data["annual_credit"] - data["annual_debit"])
 
         status_text = "Saldo positivo da empresa" if data["annual_balance"] >= 0 else "Saldo negativo da empresa"
         summary_cards = Table(
             [
                 [
+                    Paragraph(f"<b>Saldo inicial</b><br/><font size='13'>{format_minutes(initial_balance)}</font>", styles["Normal"]),
                     Paragraph(f"<b>Extras</b><br/><font size='13'>{format_minutes(data['annual_credit'])}</font>", styles["Normal"]),
                     Paragraph(f"<b>Faltantes</b><br/><font size='13'>{format_minutes(data['annual_debit'])}</font>", styles["Normal"]),
-                    Paragraph(f"<b>Saldo anual</b><br/><font size='13'>{format_minutes(data['annual_balance'])}</font>", styles["Normal"]),
+                    Paragraph(f"<b>Saldo final</b><br/><font size='13'>{format_minutes(data['annual_balance'])}</font>", styles["Normal"]),
                     Paragraph(f"<b>Status</b><br/>{status_text}", styles["Normal"]),
                 ]
             ],
-            colWidths=[45 * mm, 45 * mm, 45 * mm, 134 * mm],
+            colWidths=[40 * mm, 40 * mm, 40 * mm, 40 * mm, 109 * mm],
             style=[
-                ("BACKGROUND", (0, 0), (0, 0), colors.HexColor("#ecfdf3")),
-                ("BACKGROUND", (1, 0), (1, 0), colors.HexColor("#fff1f0")),
-                ("BACKGROUND", (2, 0), (2, 0), colors.HexColor("#eef4ff")),
-                ("BACKGROUND", (3, 0), (3, 0), colors.HexColor("#f7fafc")),
+                ("BACKGROUND", (0, 0), (0, 0), colors.HexColor("#f7fafc")),
+                ("BACKGROUND", (1, 0), (1, 0), colors.HexColor("#ecfdf3")),
+                ("BACKGROUND", (2, 0), (2, 0), colors.HexColor("#fff1f0")),
+                ("BACKGROUND", (3, 0), (3, 0), colors.HexColor("#eef4ff")),
+                ("BACKGROUND", (4, 0), (4, 0), colors.HexColor("#f7fafc")),
                 ("BOX", (0, 0), (-1, -1), 0.3, colors.HexColor("#b9c4cc")),
                 ("INNERGRID", (0, 0), (-1, -1), 0.3, colors.HexColor("#d5dde4")),
                 ("LEFTPADDING", (0, 0), (-1, -1), 8),
@@ -1844,10 +1912,11 @@ class PontoDesktop(tk.Tk):
             credits = employee["credit"]
             debits = employee["debit"]
             balance = [credit - debit for credit, debit in zip(credits, debits)]
-            table_data.append([employee["name"], "HORAS EXTRAS", *[format_minutes(value) for value in credits], format_minutes(sum(credits))])
+            employee_label = f"{employee['name']}\nInicial: {format_minutes(employee.get('initial_balance', 0))}"
+            table_data.append([employee_label, "HORAS EXTRAS", *[format_minutes(value) for value in credits], format_minutes(sum(credits))])
             table_data.append(["", "HORAS FALTANTES", *[format_minutes(value) for value in debits], format_minutes(sum(debits))])
-            table_data.append(["", "TOTAL MÊS", *[format_minutes(value) for value in balance], format_minutes(sum(balance))])
-        table_data.append(["TOTAL DA EMPRESA", "HORAS EXTRAS", *[format_minutes(value) for value in monthly_credit], format_minutes(data["annual_credit"])])
+            table_data.append(["", "TOTAL MÊS", *[format_minutes(value) for value in balance], format_minutes(employee.get("initial_balance", 0) + sum(balance))])
+        table_data.append([f"TOTAL DA EMPRESA\nInicial: {format_minutes(initial_balance)}", "HORAS EXTRAS", *[format_minutes(value) for value in monthly_credit], format_minutes(data["annual_credit"])])
         table_data.append(["", "HORAS FALTANTES", *[format_minutes(value) for value in monthly_debit], format_minutes(data["annual_debit"])])
         table_data.append(["", "SALDO MÊS", *[format_minutes(value) for value in monthly_balance], format_minutes(data["annual_balance"])])
 
@@ -1867,7 +1936,7 @@ class PontoDesktop(tk.Tk):
                 styles_list.append(("BACKGROUND", (0, row_index), (-1, row_index), colors.HexColor("#ecfdf3")))
             elif kind == "HORAS FALTANTES":
                 styles_list.append(("BACKGROUND", (0, row_index), (-1, row_index), colors.HexColor("#fff1f0")))
-            elif kind in ("TOTAL MÊS", "SALDO MÊS"):
+            elif kind in ("TOTAL MÊS", "SALDO MÊS", "SALDO FINAL", "SALDO INICIAL"):
                 styles_list.append(("BACKGROUND", (0, row_index), (-1, row_index), colors.HexColor("#eef4ff")))
                 styles_list.append(("FONTNAME", (0, row_index), (-1, row_index), "Helvetica-Bold"))
         for row_index in range(len(table_data) - 3, len(table_data)):
@@ -1876,7 +1945,7 @@ class PontoDesktop(tk.Tk):
         table.setStyle(TableStyle(styles_list))
         story.append(table)
         story.append(Spacer(1, 3 * mm))
-        story.append(Paragraph(f"Leitura do total da empresa: saldo anual = horas extras - horas faltantes. Saldos negativos indicam horas a compensar; saldos positivos indicam horas acumuladas.", styles["Normal"]))
+        story.append(Paragraph("Leitura: cada funcionario mostra o saldo inicial abaixo do nome. Na linha TOTAL MES, a coluna Total Ano representa o saldo final: saldo inicial + horas extras - horas faltantes.", styles["Normal"]))
         doc.build(story)
         return pdf_path
 

@@ -1,11 +1,11 @@
 ﻿{
-    "version":  "26.08.19",
+    "version":  "26.08.20",
     "author":  "L DE S M MEDEIROS",
     "type":  "installer",
-    "url":  "https://github.com/L-DE-S-M-MEDEIROS/ponto-funcionarios/releases/download/v26.08.19/Instalador.Ponto.Funcionarios.exe",
-    "sha256":  "b474bc5f23d919aa89044d6abfc85df1932c8aa57b4d6df24eec662d31590585",
-    "title":  "Versao 26.08.19",
-    "description":  "Melhora o PDF do banco de horas e adiciona importacao do fechamento mensal pela planilha Excel.",
+    "url":  "https://github.com/L-DE-S-M-MEDEIROS/ponto-funcionarios/releases/download/v26.08.20/Instalador.Ponto.Funcionarios.exe",
+    "sha256":  "a68ffcfe167a4c13b43419235dc4cdafe28c46c40f944f9f2652e24f6088aaaa",
+    "title":  "Versao 26.08.20",
+    "description":  "Inclui saldo inicial do ano anterior no banco de horas e no PDF anual.",
     "publishedAt":  "2026-08-11",
     "critical":  false
 }
