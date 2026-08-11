@@ -19,7 +19,7 @@ else:
     APP_DIR = Path(__file__).resolve().parent
 DB_PATH = APP_DIR / "data" / "ponto_funcionarios.db"
 CONFIG_PATH = APP_DIR / "config.json"
-APP_VERSION = "26.08.20"
+APP_VERSION = "26.08.21"
 UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/L-DE-S-M-MEDEIROS/ponto-funcionarios/main/version.json"
 
 DEFAULT_CONFIG = {
@@ -1563,10 +1563,15 @@ class PontoDesktop(tk.Tk):
         year_entry.grid(row=1, column=2, sticky="w", padx=6, pady=4)
         year_entry.bind("<Return>", lambda _event: self.load_hour_bank())
 
-        self.modern_button(filters, "Atualizar", self.load_hour_bank, width=12).grid(row=1, column=3, padx=6, pady=4)
-        self.modern_button(filters, "Gerar PDF", self.export_hour_bank_pdf, "primary", width=12).grid(row=1, column=4, padx=6, pady=4)
-        self.modern_button(filters, "Importar Excel", self.import_hour_bank_excel_file, width=14).grid(row=1, column=5, padx=6, pady=4)
-        self.modern_button(filters, "Voltar", self.show_home, width=12).grid(row=1, column=6, padx=6, pady=4)
+        self.bank_month_var = tk.StringVar(value=MONTHS[date.today().month - 1][1])
+        tk.Label(filters, text="Mês fechamento", bg=theme["bg"], fg=theme["text"], font=("Segoe UI", 10, "bold")).grid(row=0, column=3, sticky="w", padx=6)
+        ttk.Combobox(filters, textvariable=self.bank_month_var, values=[label for _num, label in MONTHS], state="readonly", width=15).grid(row=1, column=3, sticky="ew", padx=6, pady=4)
+
+        self.modern_button(filters, "Atualizar", self.load_hour_bank, width=12).grid(row=1, column=4, padx=6, pady=4)
+        self.modern_button(filters, "Gerar do ponto", self.show_generate_hour_bank_from_point, "primary", width=15).grid(row=1, column=5, padx=6, pady=4)
+        self.modern_button(filters, "Gerar PDF", self.export_hour_bank_pdf, width=12).grid(row=1, column=6, padx=6, pady=4)
+        self.modern_button(filters, "Importar Excel", self.import_hour_bank_excel_file, width=14).grid(row=1, column=7, padx=6, pady=4)
+        self.modern_button(filters, "Voltar", self.show_home, width=12).grid(row=1, column=8, padx=6, pady=4)
 
         table_frame = tk.Frame(root, bg=theme["bg"])
         table_frame.grid(row=2, column=0, sticky="nsew")
@@ -1722,6 +1727,119 @@ class PontoDesktop(tk.Tk):
         self.conn.commit()
         self.write_audit("IMPORTAR_BANCO_HORAS_EXCEL", "hour_bank_overrides", path.name, f"Funcionarios={len(imported_employees)}; meses={imported_months}; ignoradas={len(unknown_sheets)}")
         return {"employees": len(imported_employees), "months": imported_months, "unknown": len(unknown_sheets), "unknown_sheets": unknown_sheets}
+
+    def selected_bank_month(self):
+        value = getattr(self, "bank_month_var", tk.StringVar(value=MONTHS[date.today().month - 1][1])).get()
+        for number, label in MONTHS:
+            if value == label or value == number:
+                return int(number)
+        return date.today().month
+
+    def show_generate_hour_bank_from_point(self):
+        try:
+            year = int(self.bank_year_var.get() if hasattr(self, "bank_year_var") else date.today().year)
+        except ValueError:
+            messagebox.showwarning("Banco de Horas", "Informe um ano válido.")
+            return
+        month = self.selected_bank_month()
+        summary = self.collect_month_point_totals(year, month)
+
+        window = tk.Toplevel(self)
+        window.title("Gerar fechamento do ponto")
+        window.geometry("820x460")
+        window.configure(bg=self.theme["bg"])
+        window.transient(self)
+        window.columnconfigure(0, weight=1)
+        window.rowconfigure(1, weight=1)
+
+        title = tk.Label(window, text=f"Fechamento do ponto - {month:02d}/{year}", bg=self.theme["bg"], fg=self.theme["text"], font=("Segoe UI", 18, "bold"))
+        title.grid(row=0, column=0, sticky="w", padx=16, pady=(14, 8))
+
+        columns = ("employee", "days", "credit", "debit", "balance")
+        tree = ttk.Treeview(window, columns=columns, show="headings", height=13)
+        headings = ["Funcionário", "Dias", "Extras", "Faltantes", "Saldo mês"]
+        widths = [280, 70, 120, 120, 120]
+        for col, heading, width in zip(columns, headings, widths):
+            tree.heading(col, text=heading)
+            tree.column(col, width=width, minwidth=width, stretch=col == "employee", anchor="center" if col != "employee" else "w")
+        tree.grid(row=1, column=0, sticky="nsew", padx=16)
+        for item in summary["employees"]:
+            tree.insert("", "end", values=(item["name"], item["days"], format_minutes(item["credit"]), format_minutes(item["debit"]), format_minutes(item["credit"] - item["debit"])))
+
+        info = tk.Label(
+            window,
+            text=f"Total: extras {format_minutes(summary['credit'])} | faltantes {format_minutes(summary['debit'])} | saldo {format_minutes(summary['credit'] - summary['debit'])}. Ao gravar, este mês passa a vir do fechamento do ponto.",
+            bg=self.theme["bg"],
+            fg=self.theme["muted"],
+            font=("Segoe UI", 10, "bold"),
+            anchor="w",
+        )
+        info.grid(row=2, column=0, sticky="ew", padx=16, pady=10)
+
+        buttons = tk.Frame(window, bg=self.theme["bg"])
+        buttons.grid(row=3, column=0, sticky="ew", padx=16, pady=(0, 14))
+
+        def save():
+            if not summary["employees"]:
+                messagebox.showinfo("Banco de Horas", "Não há pontos para gravar neste mês.")
+                return
+            if not messagebox.askyesno("Gravar fechamento", f"Gravar o fechamento de {month:02d}/{year} no Banco de Horas oficial?"):
+                return
+            result = self.save_month_point_totals(year, month, summary)
+            self.load_hour_bank()
+            messagebox.showinfo("Banco de Horas", f"Fechamento gravado.\n\nFuncionários: {result['employees']}\nMês: {month:02d}/{year}")
+            window.destroy()
+
+        self.modern_button(buttons, "Gravar no Banco de Horas", save, "primary", width=24).pack(side="left")
+        self.modern_button(buttons, "Fechar", window.destroy, width=12).pack(side="right")
+
+    def collect_month_point_totals(self, year, month):
+        rows = self.conn.execute(
+            """
+            SELECT e.id, e.name,
+                   COUNT(t.id) AS days,
+                   SUM(COALESCE(t.credit_decimal, 0)) AS credit,
+                   SUM(COALESCE(t.debit_decimal, 0)) AS debit
+            FROM employees e
+            LEFT JOIN time_entries t ON t.employee_id = e.id AND t.year = ? AND t.month = ?
+            GROUP BY e.id, e.name
+            ORDER BY e.name
+            """,
+            (year, month),
+        ).fetchall()
+        employees = []
+        total_credit = 0
+        total_debit = 0
+        for row in rows:
+            credit = round(float(row["credit"] or 0) * 60)
+            debit = round(float(row["debit"] or 0) * 60)
+            days = int(row["days"] or 0)
+            if days == 0 and credit == 0 and debit == 0:
+                continue
+            employees.append({"id": row["id"], "name": row["name"], "days": days, "credit": credit, "debit": debit})
+            total_credit += credit
+            total_debit += debit
+        return {"year": year, "month": month, "employees": employees, "credit": total_credit, "debit": total_debit}
+
+    def save_month_point_totals(self, year, month, summary):
+        now = datetime.now().isoformat(timespec="seconds")
+        source = "Fechamento do ponto"
+        for employee in summary["employees"]:
+            self.conn.execute(
+                """
+                INSERT INTO hour_bank_overrides (employee_id, year, month, credit_minutes, debit_minutes, source, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT (employee_id, year, month)
+                DO UPDATE SET credit_minutes = excluded.credit_minutes,
+                              debit_minutes = excluded.debit_minutes,
+                              source = excluded.source,
+                              updated_at = excluded.updated_at
+                """,
+                (employee["id"], year, month, employee["credit"], employee["debit"], source, now),
+            )
+        self.conn.commit()
+        self.write_audit("GERAR_BANCO_HORAS_PONTO", "hour_bank_overrides", f"{year}-{month:02d}", f"Funcionarios={len(summary['employees'])}; credito={format_minutes(summary['credit'])}; debito={format_minutes(summary['debit'])}")
+        return {"employees": len(summary["employees"])}
 
     def collect_hour_bank(self, year, employee_filter="TODOS"):
         params = [year]

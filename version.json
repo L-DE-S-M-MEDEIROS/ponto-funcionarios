@@ -1,11 +1,11 @@
 ﻿{
-    "version":  "26.08.20",
+    "version":  "26.08.21",
     "author":  "L DE S M MEDEIROS",
     "type":  "installer",
-    "url":  "https://github.com/L-DE-S-M-MEDEIROS/ponto-funcionarios/releases/download/v26.08.20/Instalador.Ponto.Funcionarios.exe",
-    "sha256":  "a68ffcfe167a4c13b43419235dc4cdafe28c46c40f944f9f2652e24f6088aaaa",
-    "title":  "Versao 26.08.20",
-    "description":  "Inclui saldo inicial do ano anterior no banco de horas e no PDF anual.",
+    "url":  "https://github.com/L-DE-S-M-MEDEIROS/ponto-funcionarios/releases/download/v26.08.21/Instalador.Ponto.Funcionarios.exe",
+    "sha256":  "89f1ba1f85e5bd47ce71effd5e797143858692d500f0755a27f649a34ca56b1a",
+    "title":  "Versao 26.08.21",
+    "description":  "Adiciona fechamento mensal do banco de horas gerado diretamente pelos pontos do app.",
     "publishedAt":  "2026-08-11",
     "critical":  false
 }

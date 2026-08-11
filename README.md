@@ -8,7 +8,7 @@ Aplicacao local para controle de ponto, banco de horas e relatorios mensais.
 - A instalacao cria o atalho `Ponto Funcionarios` na Area de Trabalho.
 - O atalho abre `PontoFuncionarios.exe` direto, sem janela de CMD.
 - O instalador fecha o programa, faz backup do banco, limpa arquivos antigos e preserva os dados.
-- Versao atual: `26.08.20`.
+- Versao atual: `26.08.21`.
 - Ela usa o banco local `data/ponto_funcionarios.db`.
 - Tambem pode usar banco da empresa em PostgreSQL pelo menu `AUXILIARES > Parametros`.
 - Ao abrir, o sistema entra no menu principal com os botoes de funcionario, entrada/saida, consulta, importar ponto e sair.
@@ -19,6 +19,8 @@ Aplicacao local para controle de ponto, banco de horas e relatorios mensais.
 - O Banco de Horas tambem gera PDF anual pronto para impressao.
 - O PDF do Banco de Horas tem resumo executivo, total da empresa por mes e leitura clara do saldo geral.
 - O PDF do Banco de Horas considera o saldo inicial vindo do ano anterior pela planilha Excel.
+- O Banco de Horas pode gerar o fechamento oficial de um mes diretamente pelos pontos lancados no app.
+- O fluxo recomendado e `Ponto diario > Conferencia mensal > Gerar do ponto > Banco de horas oficial`.
 - A tela de ponto tem impressao em massa: PDF unico com todos os funcionarios, um por pagina, mais PDF do Banco de Horas.
 - A tela de edicao de ponto separa Dia, Ocorrencias do dia, Horarios/batidas e Totais calculados para facilitar ajustes manuais.
 - A area de Ocorrencias tem botoes rapidos para Dia normal, Marcar falta e Marcar feriado.
