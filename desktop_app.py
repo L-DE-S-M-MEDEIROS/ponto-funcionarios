@@ -5,6 +5,8 @@ import sys
 import tkinter as tk
 import urllib.request
 import webbrowser
+import getpass
+import calendar
 from datetime import date, datetime
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
@@ -16,7 +18,7 @@ else:
     APP_DIR = Path(__file__).resolve().parent
 DB_PATH = APP_DIR / "data" / "ponto_funcionarios.db"
 CONFIG_PATH = APP_DIR / "config.json"
-APP_VERSION = "26.08.15"
+APP_VERSION = "26.08.16"
 UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/L-DE-S-M-MEDEIROS/ponto-funcionarios/main/version.json"
 
 DEFAULT_CONFIG = {
@@ -177,6 +179,31 @@ class PontoDesktop(tk.Tk):
                 )
                 """
             )
+            self.conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS monthly_closings (
+                  year INTEGER NOT NULL,
+                  month INTEGER NOT NULL,
+                  closed_at TEXT,
+                  closed_by TEXT,
+                  note TEXT,
+                  PRIMARY KEY (year, month)
+                )
+                """
+            )
+            self.conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS audit_log (
+                  id SERIAL PRIMARY KEY,
+                  created_at TEXT,
+                  username TEXT,
+                  action TEXT,
+                  entity TEXT,
+                  entity_id TEXT,
+                  details TEXT
+                )
+                """
+            )
             self.ensure_time_entry_columns()
             self.conn.commit()
             return
@@ -230,6 +257,31 @@ class PontoDesktop(tk.Tk):
             )
             """
         )
+        self.conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS monthly_closings (
+              year INTEGER NOT NULL,
+              month INTEGER NOT NULL,
+              closed_at TEXT,
+              closed_by TEXT,
+              note TEXT,
+              PRIMARY KEY (year, month)
+            )
+            """
+        )
+        self.conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS audit_log (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              created_at TEXT,
+              username TEXT,
+              action TEXT,
+              entity TEXT,
+              entity_id TEXT,
+              details TEXT
+            )
+            """
+        )
         self.ensure_time_entry_columns()
         self.conn.commit()
 
@@ -251,8 +303,10 @@ class PontoDesktop(tk.Tk):
 
         ponto = tk.Menu(menu, tearoff=False)
         ponto.add_command(label="Consultar / editar ponto", command=self.show_manual_point)
+        ponto.add_command(label="Pendências do ponto", command=self.show_pending_points)
         ponto.add_command(label="Importar batidas do relógio", command=self.import_attendance_file)
         ponto.add_command(label="Banco de horas", command=self.show_hour_bank)
+        ponto.add_command(label="Fechamento mensal", command=self.show_month_closing)
         ponto.add_separator()
         ponto.add_command(label="Inserir horário de almoço", command=self.insert_lunch)
         menu.add_cascade(label="Ponto", menu=ponto)
@@ -266,6 +320,7 @@ class PontoDesktop(tk.Tk):
 
         sistema = tk.Menu(menu, tearoff=False)
         sistema.add_command(label="Banco de dados e conexão", command=self.show_parameters)
+        sistema.add_command(label="Histórico de alterações", command=self.show_audit_log)
         sistema.add_command(label="Buscar atualizações", command=self.check_updates)
         sistema.add_command(label="Cópia de segurança", command=self.backup_info)
         sistema.add_separator()
@@ -395,7 +450,7 @@ class PontoDesktop(tk.Tk):
         header.grid_propagate(False)
         header.columnconfigure(0, weight=1)
         tk.Label(header, text="Ponto Funcionários", bg="#0b7285", fg="white", font=("Arial", 24, "bold")).grid(row=0, column=0, sticky="w", padx=22, pady=(13, 0))
-        tk.Label(header, text=f"BOLSAS BABY  |  Versão {APP_VERSION}  |  {self.database_label()}", bg="#0b7285", fg="#d9f5f8", font=("Arial", 10, "bold")).grid(row=1, column=0, sticky="w", padx=22)
+        tk.Label(header, text=f"BOLSAS BABY  |  Versão {APP_VERSION}", bg="#0b7285", fg="#d9f5f8", font=("Arial", 10, "bold")).grid(row=1, column=0, sticky="w", padx=22)
 
         self.clock_var = tk.StringVar()
         clock_box = tk.Frame(header, bg="#0b7285")
@@ -408,8 +463,14 @@ class PontoDesktop(tk.Tk):
         content.grid(row=1, column=0, sticky="nsew", padx=18, pady=18)
         content.columnconfigure((0, 1, 2), weight=1)
 
+        db_text = self.database_status_text()
+        db_color = "#dcfce7" if getattr(self.conn, "kind", "local") == "postgres" else "#fff7ed"
+        db_fg = "#166534" if getattr(self.conn, "kind", "local") == "postgres" else "#9a3412"
+        tk.Label(content, text=db_text, bg=db_color, fg=db_fg, font=("Arial", 11, "bold"), anchor="w", padx=12, pady=8).grid(row=0, column=0, columnspan=3, sticky="ew", pady=(0, 12))
+
         self.home_section(content, "Lançamentos", 0, [
             ("Consultar / editar ponto", "Editar batidas, faltas, débitos e créditos", self.show_manual_point, "#0b7285"),
+            ("Pendências do ponto", "Ver faltas, batidas incompletas e saldos altos", self.show_pending_points, "#b45309"),
             ("Importar batidas", "Ler arquivo TXT do relógio de ponto", self.import_attendance_file, "#157347"),
             ("Funcionários", "Consultar cadastros e códigos do relógio", self.show_employees, "#475569"),
         ])
@@ -420,6 +481,7 @@ class PontoDesktop(tk.Tk):
         ])
         self.home_section(content, "Sistema", 2, [
             ("Banco de dados", "Local ou PostgreSQL da empresa", self.show_parameters, "#334155"),
+            ("Fechamento mensal", "Travar ou reabrir mês conferido", self.show_month_closing, "#475569"),
             ("Buscar atualizações", "Verificar nova versão no GitHub", self.check_updates, "#0369a1"),
             ("Sair", "Fechar o sistema", self.destroy, "#b42318"),
         ])
@@ -458,7 +520,7 @@ class PontoDesktop(tk.Tk):
 
     def home_section(self, parent, title, column, actions):
         section = tk.Frame(parent, bg="white", highlightbackground="#d6dde3", highlightthickness=1)
-        section.grid(row=0, column=column, sticky="nsew", padx=8)
+        section.grid(row=1, column=column, sticky="nsew", padx=8)
         section.columnconfigure(0, weight=1)
 
         tk.Label(section, text=title, bg="white", fg="#1f2933", font=("Arial", 15, "bold")).grid(row=0, column=0, sticky="w", padx=16, pady=(14, 8))
@@ -614,9 +676,11 @@ class PontoDesktop(tk.Tk):
 
         side = tk.LabelFrame(root, text="Relatórios e consultas", bg="#f3f6f8", fg="#1f2933", font=("Arial", 10, "bold"))
         side.grid(row=1, column=7, rowspan=3, sticky="ns", padx=8)
+        tk.Button(side, text="Pendências do mês", width=24, command=self.show_pending_points).pack(pady=(8, 4), padx=8)
         tk.Button(side, text="Espelho individual", width=24, command=self.show_individual_conference).pack(pady=(8, 4), padx=8)
         tk.Button(side, text="PDF ponto de todos", width=24, command=self.export_all_point_pdf).pack(pady=4, padx=8)
         tk.Button(side, text="PDF ponto + banco horas", width=24, command=self.export_mass_reports_pdf).pack(pady=4, padx=8)
+        tk.Button(side, text="Fechamento mensal", width=24, command=self.show_month_closing).pack(pady=4, padx=8)
         tk.Button(side, text="Conferir período", width=24, command=self.load_entries).pack(pady=(24, 4), padx=8)
         tk.Button(side, text="Funcionários presentes", width=24, command=self.not_ready).pack(pady=4, padx=8)
         tk.Button(side, text="Funcionários faltantes", width=24, command=self.not_ready).pack(pady=4, padx=8)
@@ -1572,7 +1636,8 @@ class PontoDesktop(tk.Tk):
             f"Arquivo: {Path(path).name}\n"
             f"Batidas lidas: {summary['punches']}\n"
             f"Dias atualizados: {summary['days']}\n"
-            f"Funcionários não encontrados: {summary['unknown']}",
+            f"Funcionários não encontrados: {summary['unknown']}\n"
+            f"Meses bloqueados por fechamento: {summary.get('closed', 0)}",
         )
 
     def import_attendance_path(self, path):
@@ -1591,6 +1656,12 @@ class PontoDesktop(tk.Tk):
                 continue
             key = (employee["id"], punch["stamp"].date())
             grouped.setdefault(key, {"employee": employee, "punches": []})["punches"].append(punch["stamp"])
+
+        closed = {(work_day.year, work_day.month) for _employee_id, work_day in grouped if self.month_is_closed(work_day.year, work_day.month)}
+        if closed:
+            closed_text = ", ".join(f"{month:02d}/{year}" for year, month in sorted(closed))
+            messagebox.showwarning("Importar Ponto", f"Importacao bloqueada. Mes fechado para edicao:\n{closed_text}")
+            return {"punches": len(punches), "days": 0, "unknown": len(unknown), "closed": len(closed)}
 
         updated_days = 0
         for (employee_id, work_day), data in grouped.items():
@@ -1667,9 +1738,10 @@ class PontoDesktop(tk.Tk):
             updated_days += 1
 
         self.conn.commit()
+        self.write_audit("IMPORTAR_PONTO", "time_entries", path.name, f"Batidas={len(punches)}; dias={updated_days}; desconhecidos={len(unknown)}")
         if self.widget_exists("tree"):
             self.load_entries()
-        return {"punches": len(punches), "days": updated_days, "unknown": len(unknown)}
+        return {"punches": len(punches), "days": updated_days, "unknown": len(unknown), "closed": 0}
 
     def widget_exists(self, name):
         widget = getattr(self, name, None)
@@ -1699,6 +1771,8 @@ class PontoDesktop(tk.Tk):
             work_date = f"{year:04d}-{month:02d}-{day:02d}"
         except ValueError:
             messagebox.showwarning("Atenção", "Informe dia, mês e ano válidos.")
+            return
+        if not self.assert_month_open(year, month):
             return
 
         punches = [
@@ -1754,6 +1828,8 @@ class PontoDesktop(tk.Tk):
                 """,
                 values + (self.selected_entry_id,),
             )
+            action = "ALTERAR_PONTO"
+            entity_id = self.selected_entry_id
         else:
             self.conn.execute(
                 """
@@ -1766,17 +1842,25 @@ class PontoDesktop(tk.Tk):
                 """,
                 values,
             )
+            action = "INCLUIR_PONTO"
+            entity_id = f"{employee_id}:{work_date}"
         self.conn.commit()
+        self.write_audit(action, "time_entries", entity_id, f"Funcionario={employee_id}; data={work_date}; credito={format_minutes(credit)}; debito={format_minutes(debit)}")
         self.clear_form()
         self.load_entries()
 
     def delete_entry(self):
         if not self.selected_entry_id:
             return
+        row = self.conn.execute("SELECT year, month, employee_id, work_date FROM time_entries WHERE id = ?", (self.selected_entry_id,)).fetchone()
+        if row and not self.assert_month_open(row["year"], row["month"]):
+            return
         if not messagebox.askyesno("Excluir", "Excluir este ponto?"):
             return
         self.conn.execute("DELETE FROM time_entries WHERE id = ?", (self.selected_entry_id,))
         self.conn.commit()
+        if row:
+            self.write_audit("EXCLUIR_PONTO", "time_entries", self.selected_entry_id, f"Funcionario={row['employee_id']}; data={row['work_date']}")
         self.clear_form()
         self.load_entries()
 
@@ -1912,6 +1996,229 @@ class PontoDesktop(tk.Tk):
             db_config = self.app_config.get("database", {})
             return f"PostgreSQL {db_config.get('host')}:{db_config.get('port')}/{db_config.get('dbname')}"
         return f"SQLite local {DB_PATH}"
+
+    def database_status_text(self):
+        if getattr(self.conn, "kind", "local") == "postgres":
+            db_config = self.app_config.get("database", {})
+            return f"Banco da empresa ATIVO - PostgreSQL {db_config.get('host')}:{db_config.get('port')} / {db_config.get('dbname')}"
+        return f"ATENCAO: usando banco local deste computador - {DB_PATH}"
+
+    def current_username(self):
+        try:
+            return getpass.getuser()
+        except Exception:
+            return "usuario"
+
+    def write_audit(self, action, entity, entity_id="", details=""):
+        try:
+            self.conn.execute(
+                """
+                INSERT INTO audit_log (created_at, username, action, entity, entity_id, details)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (datetime.now().isoformat(timespec="seconds"), self.current_username(), action, entity, str(entity_id or ""), details or ""),
+            )
+            self.conn.commit()
+        except Exception:
+            try:
+                self.conn.rollback()
+            except Exception:
+                pass
+
+    def month_is_closed(self, year, month):
+        row = self.conn.execute("SELECT 1 FROM monthly_closings WHERE year = ? AND month = ?", (year, month)).fetchone()
+        return bool(row)
+
+    def assert_month_open(self, year, month):
+        if self.month_is_closed(year, month):
+            messagebox.showwarning("Mes fechado", f"O mes {month:02d}/{year} esta fechado para edicao.\n\nReabra em Ponto > Fechamento mensal antes de alterar.")
+            return False
+        return True
+
+    def show_month_closing(self):
+        window = tk.Toplevel(self)
+        window.title("Fechamento mensal")
+        window.geometry("560x330")
+        window.configure(bg="#f3f6f8")
+        window.transient(self)
+
+        month_var = tk.StringVar(value=MONTHS[date.today().month - 1][1])
+        year_var = tk.StringVar(value=str(date.today().year))
+        status_var = tk.StringVar()
+
+        form = tk.LabelFrame(window, text="Mes de referencia", bg="#f3f6f8", font=("Arial", 11, "bold"), padx=10, pady=10)
+        form.pack(fill="x", padx=12, pady=12)
+        tk.Label(form, text="Mes", bg="#f3f6f8", font=("Arial", 10, "bold")).grid(row=0, column=0, sticky="w")
+        ttk.Combobox(form, textvariable=month_var, values=[label for _num, label in MONTHS], state="readonly", width=18).grid(row=1, column=0, sticky="ew", padx=(0, 8))
+        tk.Label(form, text="Ano", bg="#f3f6f8", font=("Arial", 10, "bold")).grid(row=0, column=1, sticky="w")
+        tk.Entry(form, textvariable=year_var, width=10).grid(row=1, column=1, sticky="w")
+
+        status = tk.Label(window, textvariable=status_var, bg="#ffffff", fg="#1f2933", anchor="w", justify="left", padx=12, pady=12, relief="solid", bd=1)
+        status.pack(fill="x", padx=12, pady=(0, 12))
+
+        def selected_period():
+            month = next(int(num) for num, label in MONTHS if label == month_var.get())
+            return int(year_var.get()), month
+
+        def refresh():
+            year, month = selected_period()
+            row = self.conn.execute("SELECT * FROM monthly_closings WHERE year = ? AND month = ?", (year, month)).fetchone()
+            if row:
+                status_var.set(f"FECHADO - {month:02d}/{year}\nFechado em: {row['closed_at']}\nUsuario: {row['closed_by'] or ''}\nObservacao: {row['note'] or ''}")
+            else:
+                status_var.set(f"ABERTO - {month:02d}/{year}\nLancamentos, importacoes e exclusoes estao liberados.")
+
+        def close_month():
+            year, month = selected_period()
+            if self.month_is_closed(year, month):
+                messagebox.showinfo("Fechar mes", f"O mes {month:02d}/{year} ja esta fechado.")
+                refresh()
+                return
+            if not messagebox.askyesno("Fechar mes", f"Fechar {month:02d}/{year} para edicao?"):
+                return
+            self.conn.execute(
+                """
+                INSERT INTO monthly_closings (year, month, closed_at, closed_by, note)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (year, month, datetime.now().isoformat(timespec="seconds"), self.current_username(), "Fechado pelo sistema"),
+            )
+            self.conn.commit()
+            self.write_audit("FECHAR_MES", "monthly_closings", f"{year}-{month:02d}", "Mes fechado para edicao")
+            refresh()
+
+        def reopen_month():
+            year, month = selected_period()
+            if not messagebox.askyesno("Reabrir mes", f"Reabrir {month:02d}/{year} para edicao?"):
+                return
+            self.conn.execute("DELETE FROM monthly_closings WHERE year = ? AND month = ?", (year, month))
+            self.conn.commit()
+            self.write_audit("REABRIR_MES", "monthly_closings", f"{year}-{month:02d}", "Mes reaberto para edicao")
+            refresh()
+
+        buttons = tk.Frame(window, bg="#f3f6f8")
+        buttons.pack(fill="x", padx=12)
+        tk.Button(buttons, text="Atualizar", width=14, command=refresh).pack(side="left")
+        tk.Button(buttons, text="Fechar mes", width=14, command=close_month).pack(side="left", padx=8)
+        tk.Button(buttons, text="Reabrir mes", width=14, command=reopen_month).pack(side="left")
+        tk.Button(buttons, text="Sair", width=12, command=window.destroy).pack(side="right")
+        refresh()
+
+    def show_audit_log(self):
+        window = tk.Toplevel(self)
+        window.title("Historico de alteracoes")
+        window.geometry("980x520")
+        window.configure(bg="#f3f6f8")
+        columns = ("created_at", "username", "action", "entity", "entity_id", "details")
+        tree = ttk.Treeview(window, columns=columns, show="headings", height=20)
+        headings = ["Data/hora", "Usuario", "Acao", "Tela", "ID", "Detalhes"]
+        widths = [150, 120, 130, 110, 90, 430]
+        for col, heading, width in zip(columns, headings, widths):
+            tree.heading(col, text=heading)
+            tree.column(col, width=width, minwidth=width, stretch=col == "details")
+        tree.pack(fill="both", expand=True, padx=10, pady=10)
+        for row in self.conn.execute("SELECT * FROM audit_log ORDER BY id DESC LIMIT 300").fetchall():
+            tree.insert("", "end", values=tuple(row[col] or "" for col in columns))
+        tk.Button(window, text="Fechar", width=12, command=window.destroy).pack(anchor="e", padx=10, pady=(0, 10))
+
+    def show_pending_points(self):
+        window = tk.Toplevel(self)
+        window.title("Pendencias do ponto")
+        window.geometry("1120x620")
+        window.configure(bg="#f3f6f8")
+        window.transient(self)
+
+        controls = tk.Frame(window, bg="#f3f6f8")
+        controls.pack(fill="x", padx=10, pady=10)
+        month_var = tk.StringVar(value=MONTHS[date.today().month - 1][1])
+        year_var = tk.StringVar(value=str(date.today().year))
+        summary_var = tk.StringVar()
+        tk.Label(controls, text="Mes", bg="#f3f6f8", font=("Arial", 10, "bold")).pack(side="left")
+        ttk.Combobox(controls, textvariable=month_var, values=[label for _num, label in MONTHS], state="readonly", width=16).pack(side="left", padx=6)
+        tk.Label(controls, text="Ano", bg="#f3f6f8", font=("Arial", 10, "bold")).pack(side="left", padx=(12, 0))
+        tk.Entry(controls, textvariable=year_var, width=8).pack(side="left", padx=6)
+
+        columns = ("employee", "date", "type", "worked", "credit", "debit", "note")
+        tree = ttk.Treeview(window, columns=columns, show="headings", height=20)
+        headings = ["Funcionario", "Data", "Pendencia", "Trabalhada", "Credito", "Debito", "Observacao"]
+        widths = [190, 90, 300, 90, 80, 80, 280]
+        for col, heading, width in zip(columns, headings, widths):
+            tree.heading(col, text=heading)
+            tree.column(col, width=width, minwidth=width, stretch=col in ("type", "note"))
+        tree.pack(fill="both", expand=True, padx=10)
+        tk.Label(window, textvariable=summary_var, bg="#f3f6f8", fg="#334155", font=("Arial", 10, "bold"), anchor="w").pack(fill="x", padx=10, pady=6)
+
+        def selected_period():
+            month = next(int(num) for num, label in MONTHS if label == month_var.get())
+            return int(year_var.get()), month
+
+        def refresh():
+            for item in tree.get_children():
+                tree.delete(item)
+            year, month = selected_period()
+            pending = self.collect_pending_points(year, month)
+            for item in pending:
+                tree.insert("", "end", values=(item["employee"], item["date"], item["type"], item["worked"], item["credit"], item["debit"], item["note"]))
+            summary_var.set(f"{len(pending)} pendencia(s) encontradas em {month:02d}/{year}. Corrija na tela Consultar / editar ponto antes de imprimir ou fechar o mes.")
+
+        def open_edit():
+            self.show_manual_point()
+            self.month_var.set(month_var.get())
+            self.year_var.set(year_var.get())
+            self.load_entries()
+            window.destroy()
+
+        tk.Button(controls, text="Atualizar", width=14, command=refresh).pack(side="left", padx=10)
+        tk.Button(controls, text="Abrir edicao", width=14, command=open_edit).pack(side="left")
+        tk.Button(controls, text="Fechar", width=12, command=window.destroy).pack(side="right")
+        refresh()
+
+    def collect_pending_points(self, year, month):
+        _, days_in_month = calendar.monthrange(year, month)
+        employees = self.conn.execute("SELECT * FROM employees ORDER BY name").fetchall()
+        rows = self.conn.execute("SELECT * FROM time_entries WHERE year = ? AND month = ? ORDER BY employee_id, day, id", (year, month)).fetchall()
+        by_employee_day = {}
+        for row in rows:
+            by_employee_day.setdefault((row["employee_id"], row["day"]), []).append(row)
+
+        pending = []
+        for employee in employees:
+            for day in range(1, days_in_month + 1):
+                current = date(year, month, day)
+                expected = self.expected_hours_for_date(employee, current)
+                if minutes(expected) <= 0:
+                    continue
+                entries = by_employee_day.get((employee["id"], day), [])
+                if not entries:
+                    pending.append({"employee": employee["name"], "date": f"{day:02d}/{month:02d}/{year}", "type": "Sem lancamento de ponto", "worked": "", "credit": "", "debit": "", "note": ""})
+                    continue
+                for entry in entries:
+                    punches = [entry["entrada1"], entry["saida1"], entry["entrada2"], entry["saida2"], entry["entrada3"], entry["saida3"], entry["entrada4"], entry["saida4"]]
+                    punch_count = len([value for value in punches if normalize_time(value)])
+                    problems = []
+                    if punch_count % 2 == 1:
+                        problems.append("Batida sem par")
+                    if (entry["absence"] or "").upper() == "S":
+                        problems.append("Falta marcada")
+                    if (entry["holiday"] or "").upper() == "S":
+                        problems.append("Feriado marcado")
+                    if minutes(entry["debit_hours"]) >= 30:
+                        problems.append("Debito acima de 30 min")
+                    if minutes(entry["credit_hours"]) >= 120:
+                        problems.append("Credito acima de 2h")
+                    if entry["note"]:
+                        problems.append("Tem observacao")
+                    if problems:
+                        pending.append({
+                            "employee": employee["name"],
+                            "date": f"{day:02d}/{month:02d}/{year}",
+                            "type": "; ".join(problems),
+                            "worked": hhmm(entry["worked_hours"]),
+                            "credit": hhmm(entry["credit_hours"]),
+                            "debit": hhmm(entry["debit_hours"]),
+                            "note": entry["note"] or "",
+                        })
+        return pending
 
     def show_parameters_old(self):
         messagebox.showinfo("Parâmetros", f"Banco local:\n{DB_PATH}")

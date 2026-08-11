@@ -1,11 +1,11 @@
 ﻿{
-    "version":  "26.08.15",
+    "version":  "26.08.16",
     "author":  "L DE S M MEDEIROS",
     "type":  "installer",
-    "url":  "https://github.com/L-DE-S-M-MEDEIROS/ponto-funcionarios/releases/download/v26.08.15/Instalador.Ponto.Funcionarios.exe",
-    "sha256":  "3b7e39c22666027ed769d829b33c13fb5b40017aaf89b8f3d65061faa36644f6",
-    "title":  "Versao 26.08.15",
-    "description":  "Facilita a edicao de ocorrencias com botoes Dia normal, Marcar falta e Marcar feriado, e corrige o salvamento do campo feriado.",
-    "publishedAt":  "2026-08-07",
+    "url":  "https://github.com/L-DE-S-M-MEDEIROS/ponto-funcionarios/releases/download/v26.08.16/Instalador.Ponto.Funcionarios.exe",
+    "sha256":  "9a8c9019968254c61d430d9fb9329775943ab248cd61cfd97037294cc22811e6",
+    "title":  "Versao 26.08.16",
+    "description":  "Adiciona Pendencias do Ponto, fechamento mensal, historico de alteracoes e aviso claro do banco usado.",
+    "publishedAt":  "2026-08-11",
     "critical":  false
 }
