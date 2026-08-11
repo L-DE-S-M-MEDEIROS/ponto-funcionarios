@@ -1,11 +1,11 @@
 ﻿{
-    "version":  "26.08.18",
+    "version":  "26.08.19",
     "author":  "L DE S M MEDEIROS",
     "type":  "installer",
-    "url":  "https://github.com/L-DE-S-M-MEDEIROS/ponto-funcionarios/releases/download/v26.08.18/Instalador.Ponto.Funcionarios.exe",
-    "sha256":  "ca3a7b32fae11998ea5bc89a8b375ba7d19dbacb7ff32e588a87d13dad9acb1a",
-    "title":  "Versao 26.08.18",
-    "description":  "Adiciona tema claro premium, tema escuro grafite e padronizacao visual das telas principais.",
+    "url":  "https://github.com/L-DE-S-M-MEDEIROS/ponto-funcionarios/releases/download/v26.08.19/Instalador.Ponto.Funcionarios.exe",
+    "sha256":  "b474bc5f23d919aa89044d6abfc85df1932c8aa57b4d6df24eec662d31590585",
+    "title":  "Versao 26.08.19",
+    "description":  "Melhora o PDF do banco de horas e adiciona importacao do fechamento mensal pela planilha Excel.",
     "publishedAt":  "2026-08-11",
     "critical":  false
 }

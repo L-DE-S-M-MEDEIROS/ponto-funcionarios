@@ -3,11 +3,12 @@ import json
 import os
 import sys
 import tkinter as tk
+import unicodedata
 import urllib.request
 import webbrowser
 import getpass
 import calendar
-from datetime import date, datetime
+from datetime import date, datetime, time, timedelta
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
@@ -18,7 +19,7 @@ else:
     APP_DIR = Path(__file__).resolve().parent
 DB_PATH = APP_DIR / "data" / "ponto_funcionarios.db"
 CONFIG_PATH = APP_DIR / "config.json"
-APP_VERSION = "26.08.18"
+APP_VERSION = "26.08.19"
 UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/L-DE-S-M-MEDEIROS/ponto-funcionarios/main/version.json"
 
 DEFAULT_CONFIG = {
@@ -263,6 +264,20 @@ class PontoDesktop(tk.Tk):
                 )
                 """
             )
+            self.conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS hour_bank_overrides (
+                  employee_id INTEGER NOT NULL,
+                  year INTEGER NOT NULL,
+                  month INTEGER NOT NULL,
+                  credit_minutes INTEGER NOT NULL DEFAULT 0,
+                  debit_minutes INTEGER NOT NULL DEFAULT 0,
+                  source TEXT,
+                  updated_at TEXT,
+                  PRIMARY KEY (employee_id, year, month)
+                )
+                """
+            )
             self.ensure_time_entry_columns()
             self.conn.commit()
             return
@@ -338,6 +353,20 @@ class PontoDesktop(tk.Tk):
               entity TEXT,
               entity_id TEXT,
               details TEXT
+            )
+            """
+        )
+        self.conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS hour_bank_overrides (
+              employee_id INTEGER NOT NULL,
+              year INTEGER NOT NULL,
+              month INTEGER NOT NULL,
+              credit_minutes INTEGER NOT NULL DEFAULT 0,
+              debit_minutes INTEGER NOT NULL DEFAULT 0,
+              source TEXT,
+              updated_at TEXT,
+              PRIMARY KEY (employee_id, year, month)
             )
             """
         )
@@ -1512,7 +1541,8 @@ class PontoDesktop(tk.Tk):
 
         self.modern_button(filters, "Atualizar", self.load_hour_bank, width=12).grid(row=1, column=3, padx=6, pady=4)
         self.modern_button(filters, "Gerar PDF", self.export_hour_bank_pdf, "primary", width=12).grid(row=1, column=4, padx=6, pady=4)
-        self.modern_button(filters, "Voltar", self.show_home, width=12).grid(row=1, column=5, padx=6, pady=4)
+        self.modern_button(filters, "Importar Excel", self.import_hour_bank_excel_file, width=14).grid(row=1, column=5, padx=6, pady=4)
+        self.modern_button(filters, "Voltar", self.show_home, width=12).grid(row=1, column=6, padx=6, pady=4)
 
         table_frame = tk.Frame(root, bg=theme["bg"])
         table_frame.grid(row=2, column=0, sticky="nsew")
@@ -1555,38 +1585,11 @@ class PontoDesktop(tk.Tk):
             messagebox.showwarning("Banco de Horas", "Informe um ano válido.")
             return
 
-        employee_filter = self.bank_employee_var.get()
-        params = [year]
-        employee_clause = ""
-        if employee_filter and employee_filter != "TODOS":
-            employee_clause = "AND e.id = ?"
-            params.append(int(employee_filter.split(" - ", 1)[0]))
-
-        rows = self.conn.execute(
-            f"""
-            SELECT e.id, e.name, t.month,
-                   SUM(COALESCE(t.credit_decimal, 0)) AS credit,
-                   SUM(COALESCE(t.debit_decimal, 0)) AS debit
-            FROM employees e
-            LEFT JOIN time_entries t ON t.employee_id = e.id AND t.year = ?
-            WHERE 1 = 1 {employee_clause}
-            GROUP BY e.id, e.name, t.month
-            ORDER BY e.name, t.month
-            """,
-            params,
-        ).fetchall()
-
-        employees = {}
-        for row in rows:
-            employee = employees.setdefault(row["id"], {"name": row["name"], "credit": [0] * 12, "debit": [0] * 12})
-            month = row["month"]
-            if month:
-                employee["credit"][int(month) - 1] = round(float(row["credit"] or 0) * 60)
-                employee["debit"][int(month) - 1] = round(float(row["debit"] or 0) * 60)
+        data = self.collect_hour_bank(year, self.bank_employee_var.get())
 
         annual_credit = 0
         annual_debit = 0
-        for employee in employees.values():
+        for employee in data["employees"]:
             credits = employee["credit"]
             debits = employee["debit"]
             balance = [credit - debit for credit, debit in zip(credits, debits)]
@@ -1600,6 +1603,87 @@ class PontoDesktop(tk.Tk):
         self.bank_summary_var.set(
             f"Resumo {year}: extras {format_minutes(annual_credit)} | faltantes {format_minutes(annual_debit)} | saldo {format_minutes(final_balance)}"
         )
+
+    def import_hour_bank_excel_file(self):
+        path = filedialog.askopenfilename(
+            title="Importar Banco de Horas do Excel",
+            filetypes=[("Planilhas Excel", "*.xlsx"), ("Todos os arquivos", "*.*")],
+        )
+        if not path:
+            return
+        try:
+            result = self.import_hour_bank_excel_path(Path(path))
+        except Exception as exc:
+            messagebox.showerror("Banco de Horas", f"Não foi possível importar o Excel.\n\n{exc}")
+            return
+        self.load_hour_bank()
+        messagebox.showinfo(
+            "Banco de Horas",
+            f"Fechamento importado do Excel.\n\n"
+            f"Arquivo: {Path(path).name}\n"
+            f"Funcionários atualizados: {result['employees']}\n"
+            f"Meses gravados: {result['months']}\n"
+            f"Abas ignoradas: {result['unknown']}",
+        )
+
+    def import_hour_bank_excel_path(self, path):
+        try:
+            from openpyxl import load_workbook
+        except ImportError as exc:
+            raise RuntimeError("Leitor de Excel não encontrado. Reinstale a versão atual do sistema.") from exc
+
+        workbook = load_workbook(path, data_only=True)
+        employees = {
+            normalize_employee_name(row["name"]): row
+            for row in self.conn.execute("SELECT id, name FROM employees ORDER BY name").fetchall()
+        }
+        month_cells = {
+            1: ("C4", "C5"),
+            2: ("D4", "D5"),
+            3: ("E4", "E5"),
+            4: ("F4", "F5"),
+            5: ("C8", "C9"),
+            6: ("D8", "D9"),
+            7: ("E8", "E9"),
+            8: ("F8", "F9"),
+            9: ("C12", "C13"),
+            10: ("D12", "D13"),
+            11: ("E12", "E13"),
+            12: ("F12", "F13"),
+        }
+        imported_employees = set()
+        imported_months = 0
+        unknown_sheets = []
+        now = datetime.now().isoformat(timespec="seconds")
+        source = f"Excel: {path.name}"
+
+        for sheet in workbook.worksheets:
+            employee_name = normalize_employee_name(sheet.title.replace("26", ""))
+            employee = employees.get(employee_name)
+            if not employee:
+                unknown_sheets.append(sheet.title)
+                continue
+            for month, (credit_cell, debit_cell) in month_cells.items():
+                credit_minutes = excel_duration_minutes(sheet[credit_cell].value)
+                debit_minutes = excel_duration_minutes(sheet[debit_cell].value)
+                self.conn.execute(
+                    """
+                    INSERT INTO hour_bank_overrides (employee_id, year, month, credit_minutes, debit_minutes, source, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT (employee_id, year, month)
+                    DO UPDATE SET credit_minutes = excluded.credit_minutes,
+                                  debit_minutes = excluded.debit_minutes,
+                                  source = excluded.source,
+                                  updated_at = excluded.updated_at
+                    """,
+                    (employee["id"], 2026, month, credit_minutes, debit_minutes, source, now),
+                )
+                imported_months += 1
+            imported_employees.add(employee["id"])
+
+        self.conn.commit()
+        self.write_audit("IMPORTAR_BANCO_HORAS_EXCEL", "hour_bank_overrides", path.name, f"Funcionarios={len(imported_employees)}; meses={imported_months}; ignoradas={len(unknown_sheets)}")
+        return {"employees": len(imported_employees), "months": imported_months, "unknown": len(unknown_sheets), "unknown_sheets": unknown_sheets}
 
     def collect_hour_bank(self, year, employee_filter="TODOS"):
         params = [year]
@@ -1624,11 +1708,34 @@ class PontoDesktop(tk.Tk):
 
         employees = {}
         for row in rows:
-            employee = employees.setdefault(row["id"], {"name": row["name"], "credit": [0] * 12, "debit": [0] * 12})
+            employee = employees.setdefault(row["id"], {"id": row["id"], "name": row["name"], "credit": [0] * 12, "debit": [0] * 12, "source": ["ponto"] * 12})
             month = row["month"]
             if month:
                 employee["credit"][int(month) - 1] = round(float(row["credit"] or 0) * 60)
                 employee["debit"][int(month) - 1] = round(float(row["debit"] or 0) * 60)
+
+        override_params = [year]
+        override_clause = ""
+        if employee_filter and employee_filter != "TODOS":
+            override_clause = "AND employee_id = ?"
+            override_params.append(int(employee_filter.split(" - ", 1)[0]))
+        overrides = self.conn.execute(
+            f"""
+            SELECT employee_id, month, credit_minutes, debit_minutes, source
+            FROM hour_bank_overrides
+            WHERE year = ? {override_clause}
+            """,
+            override_params,
+        ).fetchall()
+        for row in overrides:
+            employee = employees.get(row["employee_id"])
+            if not employee:
+                continue
+            month_index = int(row["month"]) - 1
+            if 0 <= month_index < 12:
+                employee["credit"][month_index] = int(row["credit_minutes"] or 0)
+                employee["debit"][month_index] = int(row["debit_minutes"] or 0)
+                employee["source"][month_index] = row["source"] or "excel"
 
         employee_list = list(employees.values())
         annual_credit = sum(sum(employee["credit"]) for employee in employee_list)
@@ -1696,6 +1803,41 @@ class PontoDesktop(tk.Tk):
         )
         story.append(Spacer(1, 4 * mm))
 
+        monthly_credit = [0] * 12
+        monthly_debit = [0] * 12
+        for employee in data["employees"]:
+            monthly_credit = [total + value for total, value in zip(monthly_credit, employee["credit"])]
+            monthly_debit = [total + value for total, value in zip(monthly_debit, employee["debit"])]
+        monthly_balance = [credit - debit for credit, debit in zip(monthly_credit, monthly_debit)]
+
+        status_text = "Saldo positivo da empresa" if data["annual_balance"] >= 0 else "Saldo negativo da empresa"
+        summary_cards = Table(
+            [
+                [
+                    Paragraph(f"<b>Extras</b><br/><font size='13'>{format_minutes(data['annual_credit'])}</font>", styles["Normal"]),
+                    Paragraph(f"<b>Faltantes</b><br/><font size='13'>{format_minutes(data['annual_debit'])}</font>", styles["Normal"]),
+                    Paragraph(f"<b>Saldo anual</b><br/><font size='13'>{format_minutes(data['annual_balance'])}</font>", styles["Normal"]),
+                    Paragraph(f"<b>Status</b><br/>{status_text}", styles["Normal"]),
+                ]
+            ],
+            colWidths=[45 * mm, 45 * mm, 45 * mm, 134 * mm],
+            style=[
+                ("BACKGROUND", (0, 0), (0, 0), colors.HexColor("#ecfdf3")),
+                ("BACKGROUND", (1, 0), (1, 0), colors.HexColor("#fff1f0")),
+                ("BACKGROUND", (2, 0), (2, 0), colors.HexColor("#eef4ff")),
+                ("BACKGROUND", (3, 0), (3, 0), colors.HexColor("#f7fafc")),
+                ("BOX", (0, 0), (-1, -1), 0.3, colors.HexColor("#b9c4cc")),
+                ("INNERGRID", (0, 0), (-1, -1), 0.3, colors.HexColor("#d5dde4")),
+                ("LEFTPADDING", (0, 0), (-1, -1), 8),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+                ("TOPPADDING", (0, 0), (-1, -1), 6),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ],
+        )
+        story.append(summary_cards)
+        story.append(Spacer(1, 4 * mm))
+
         headers = ["Funcionário", "Tipo", *[label[:3].upper() for _number, label in MONTHS], "Total Ano"]
         table_data = [headers]
         for employee in data["employees"]:
@@ -1705,7 +1847,9 @@ class PontoDesktop(tk.Tk):
             table_data.append([employee["name"], "HORAS EXTRAS", *[format_minutes(value) for value in credits], format_minutes(sum(credits))])
             table_data.append(["", "HORAS FALTANTES", *[format_minutes(value) for value in debits], format_minutes(sum(debits))])
             table_data.append(["", "TOTAL MÊS", *[format_minutes(value) for value in balance], format_minutes(sum(balance))])
-        table_data.append(["TOTAL GERAL", "SALDO", *["" for _ in MONTHS], format_minutes(data["annual_balance"])])
+        table_data.append(["TOTAL DA EMPRESA", "HORAS EXTRAS", *[format_minutes(value) for value in monthly_credit], format_minutes(data["annual_credit"])])
+        table_data.append(["", "HORAS FALTANTES", *[format_minutes(value) for value in monthly_debit], format_minutes(data["annual_debit"])])
+        table_data.append(["", "SALDO MÊS", *[format_minutes(value) for value in monthly_balance], format_minutes(data["annual_balance"])])
 
         table = Table(table_data, repeatRows=1, colWidths=[44 * mm, 28 * mm, *([13 * mm] * 12), 24 * mm])
         styles_list = [
@@ -1716,22 +1860,23 @@ class PontoDesktop(tk.Tk):
             ("GRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#b9c4cc")),
             ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
             ("ALIGN", (2, 0), (-1, -1), "CENTER"),
-            ("BACKGROUND", (0, -1), (-1, -1), colors.HexColor("#f7fafc")),
-            ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
         ]
-        for row_index in range(1, len(table_data) - 1):
+        for row_index in range(1, len(table_data)):
             kind = table_data[row_index][1]
             if kind == "HORAS EXTRAS":
                 styles_list.append(("BACKGROUND", (0, row_index), (-1, row_index), colors.HexColor("#ecfdf3")))
             elif kind == "HORAS FALTANTES":
                 styles_list.append(("BACKGROUND", (0, row_index), (-1, row_index), colors.HexColor("#fff1f0")))
-            elif kind == "TOTAL MÊS":
+            elif kind in ("TOTAL MÊS", "SALDO MÊS"):
                 styles_list.append(("BACKGROUND", (0, row_index), (-1, row_index), colors.HexColor("#eef4ff")))
                 styles_list.append(("FONTNAME", (0, row_index), (-1, row_index), "Helvetica-Bold"))
+        for row_index in range(len(table_data) - 3, len(table_data)):
+            styles_list.append(("LINEABOVE", (0, row_index), (-1, row_index), 0.5, colors.HexColor("#64748b")))
+            styles_list.append(("FONTNAME", (0, row_index), (-1, row_index), "Helvetica-Bold"))
         table.setStyle(TableStyle(styles_list))
         story.append(table)
-        story.append(Spacer(1, 4 * mm))
-        story.append(Paragraph(f"Resumo {data['year']}: extras {format_minutes(data['annual_credit'])} | faltantes {format_minutes(data['annual_debit'])} | saldo {format_minutes(data['annual_balance'])}", styles["Normal"]))
+        story.append(Spacer(1, 3 * mm))
+        story.append(Paragraph(f"Leitura do total da empresa: saldo anual = horas extras - horas faltantes. Saldos negativos indicam horas a compensar; saldos positivos indicam horas acumuladas.", styles["Normal"]))
         doc.build(story)
         return pdf_path
 
@@ -3083,6 +3228,31 @@ def decimal_to_hhmm(value):
         return format_minutes(round(float(value) * 60))
     except ValueError:
         return ""
+
+
+def normalize_employee_name(value):
+    text = unicodedata.normalize("NFKD", str(value or ""))
+    text = "".join(char for char in text if not unicodedata.combining(char))
+    text = text.upper().replace(" 26", "").replace("26", "")
+    return " ".join(text.split())
+
+
+def excel_duration_minutes(value):
+    if value in (None, ""):
+        return 0
+    if isinstance(value, timedelta):
+        return round(value.total_seconds() / 60)
+    if isinstance(value, time):
+        return value.hour * 60 + value.minute
+    if isinstance(value, (int, float)):
+        return round(float(value) * 24 * 60)
+    parts = str(value).strip().split(":")
+    if len(parts) >= 2:
+        try:
+            return int(parts[0]) * 60 + int(parts[1])
+        except ValueError:
+            return 0
+    return 0
 
 
 def entry_minutes(row, decimal_key, time_key):
