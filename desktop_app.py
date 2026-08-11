@@ -18,7 +18,7 @@ else:
     APP_DIR = Path(__file__).resolve().parent
 DB_PATH = APP_DIR / "data" / "ponto_funcionarios.db"
 CONFIG_PATH = APP_DIR / "config.json"
-APP_VERSION = "26.08.16"
+APP_VERSION = "26.08.17"
 UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/L-DE-S-M-MEDEIROS/ponto-funcionarios/main/version.json"
 
 DEFAULT_CONFIG = {
@@ -303,6 +303,7 @@ class PontoDesktop(tk.Tk):
 
         ponto = tk.Menu(menu, tearoff=False)
         ponto.add_command(label="Consultar / editar ponto", command=self.show_manual_point)
+        ponto.add_command(label="Conferência diária", command=self.show_daily_conference)
         ponto.add_command(label="Pendências do ponto", command=self.show_pending_points)
         ponto.add_command(label="Importar batidas do relógio", command=self.import_attendance_file)
         ponto.add_command(label="Banco de horas", command=self.show_hour_bank)
@@ -312,9 +313,9 @@ class PontoDesktop(tk.Tk):
         menu.add_cascade(label="Ponto", menu=ponto)
 
         relatorios = tk.Menu(menu, tearoff=False)
-        relatorios.add_command(label="Espelho individual em PDF", command=self.show_manual_point)
-        relatorios.add_command(label="Espelho de todos em PDF", command=self.show_manual_point)
-        relatorios.add_command(label="Ponto + banco de horas em PDF", command=self.show_manual_point)
+        relatorios.add_command(label="Espelho individual em PDF", command=self.export_individual_pdf)
+        relatorios.add_command(label="Espelho de todos em PDF", command=self.export_all_point_pdf)
+        relatorios.add_command(label="Ponto + banco de horas em PDF", command=self.export_mass_reports_pdf)
         relatorios.add_command(label="Banco de horas em PDF", command=self.show_hour_bank)
         menu.add_cascade(label="Relatórios", menu=relatorios)
 
@@ -470,6 +471,7 @@ class PontoDesktop(tk.Tk):
 
         self.home_section(content, "Lançamentos", 0, [
             ("Consultar / editar ponto", "Editar batidas, faltas, débitos e créditos", self.show_manual_point, "#0b7285"),
+            ("Conferência diária", "Ver todos os funcionários em uma data", self.show_daily_conference, "#0369a1"),
             ("Pendências do ponto", "Ver faltas, batidas incompletas e saldos altos", self.show_pending_points, "#b45309"),
             ("Importar batidas", "Ler arquivo TXT do relógio de ponto", self.import_attendance_file, "#157347"),
             ("Funcionários", "Consultar cadastros e códigos do relógio", self.show_employees, "#475569"),
@@ -676,14 +678,15 @@ class PontoDesktop(tk.Tk):
 
         side = tk.LabelFrame(root, text="Relatórios e consultas", bg="#f3f6f8", fg="#1f2933", font=("Arial", 10, "bold"))
         side.grid(row=1, column=7, rowspan=3, sticky="ns", padx=8)
+        tk.Button(side, text="Conferência diária", width=24, command=self.show_daily_conference).pack(pady=(8, 4), padx=8)
         tk.Button(side, text="Pendências do mês", width=24, command=self.show_pending_points).pack(pady=(8, 4), padx=8)
         tk.Button(side, text="Espelho individual", width=24, command=self.show_individual_conference).pack(pady=(8, 4), padx=8)
         tk.Button(side, text="PDF ponto de todos", width=24, command=self.export_all_point_pdf).pack(pady=4, padx=8)
         tk.Button(side, text="PDF ponto + banco horas", width=24, command=self.export_mass_reports_pdf).pack(pady=4, padx=8)
         tk.Button(side, text="Fechamento mensal", width=24, command=self.show_month_closing).pack(pady=4, padx=8)
         tk.Button(side, text="Conferir período", width=24, command=self.load_entries).pack(pady=(24, 4), padx=8)
-        tk.Button(side, text="Funcionários presentes", width=24, command=self.not_ready).pack(pady=4, padx=8)
-        tk.Button(side, text="Funcionários faltantes", width=24, command=self.not_ready).pack(pady=4, padx=8)
+        tk.Button(side, text="Funcionários presentes", width=24, command=lambda: self.show_daily_conference("presentes")).pack(pady=4, padx=8)
+        tk.Button(side, text="Funcionários faltantes", width=24, command=lambda: self.show_daily_conference("faltantes")).pack(pady=4, padx=8)
 
         tk.Label(root, text="Clique em uma linha da tabela para editar. Depois altere Dia, Ocorrencias ou Horarios acima e clique em Gravar alteracoes.", bg="#f3f6f8", fg="#334155", font=("Arial", 10, "bold")).grid(row=3, column=0, columnspan=7, sticky="w", pady=(6, 0))
 
@@ -1630,15 +1633,57 @@ class PontoDesktop(tk.Tk):
             messagebox.showerror("Importar Ponto", f"Não foi possível importar o arquivo.\n\n{exc}")
             return
 
-        messagebox.showinfo(
-            "Importar Ponto",
-            "Importação concluída.\n\n"
-            f"Arquivo: {Path(path).name}\n"
-            f"Batidas lidas: {summary['punches']}\n"
-            f"Dias atualizados: {summary['days']}\n"
-            f"Funcionários não encontrados: {summary['unknown']}\n"
-            f"Meses bloqueados por fechamento: {summary.get('closed', 0)}",
-        )
+        self.show_import_summary(Path(path), summary)
+
+    def show_import_summary(self, path, summary):
+        window = tk.Toplevel(self)
+        window.title("Resumo da importação")
+        window.geometry("820x520")
+        window.configure(bg="#f3f6f8")
+        window.transient(self)
+        window.columnconfigure(0, weight=1)
+        window.rowconfigure(2, weight=1)
+
+        header = tk.Frame(window, bg="#0b7285", height=70)
+        header.grid(row=0, column=0, sticky="ew")
+        header.grid_propagate(False)
+        tk.Label(header, text="Importação do relógio concluída", bg="#0b7285", fg="white", font=("Arial", 18, "bold")).pack(anchor="w", padx=16, pady=(10, 0))
+        tk.Label(header, text=path.name, bg="#0b7285", fg="#d9f5f8", font=("Arial", 10, "bold")).pack(anchor="w", padx=16)
+
+        cards = tk.Frame(window, bg="#f3f6f8")
+        cards.grid(row=1, column=0, sticky="ew", padx=12, pady=10)
+        for index, (label, value, color) in enumerate([
+            ("Batidas lidas", summary["punches"], "#e0f2fe"),
+            ("Dias atualizados", summary["days"], "#dcfce7"),
+            ("Não encontrados", summary["unknown"], "#fee2e2" if summary["unknown"] else "#f1f5f9"),
+            ("Meses bloqueados", summary.get("closed", 0), "#fef3c7" if summary.get("closed", 0) else "#f1f5f9"),
+        ]):
+            card = tk.Frame(cards, bg=color, highlightbackground="#cbd5e1", highlightthickness=1)
+            card.grid(row=0, column=index, sticky="ew", padx=4)
+            cards.columnconfigure(index, weight=1)
+            tk.Label(card, text=label, bg=color, fg="#334155", font=("Arial", 9, "bold")).pack(anchor="w", padx=10, pady=(8, 0))
+            tk.Label(card, text=str(value), bg=color, fg="#0f172a", font=("Arial", 18, "bold")).pack(anchor="w", padx=10, pady=(0, 8))
+
+        notebook = ttk.Notebook(window)
+        notebook.grid(row=2, column=0, sticky="nsew", padx=12, pady=(0, 10))
+
+        def make_list_tab(title, rows, empty_text):
+            tab = tk.Frame(notebook, bg="white")
+            notebook.add(tab, text=title)
+            text = tk.Text(tab, height=12, wrap="word", bg="white", relief="flat", font=("Arial", 10))
+            text.pack(fill="both", expand=True, padx=10, pady=10)
+            content = "\n".join(rows[:300]) if rows else empty_text
+            text.insert("1.0", content)
+            text.configure(state="disabled")
+
+        make_list_tab("Dias atualizados", summary.get("updated_items", []), "Nenhum dia foi atualizado.")
+        make_list_tab("Funcionários não encontrados", summary.get("unknown_items", []), "Todos os códigos do arquivo foram encontrados no cadastro.")
+        make_list_tab("Avisos", summary.get("warnings", []), "Nenhum aviso na importação.")
+
+        bottom = tk.Frame(window, bg="#f3f6f8")
+        bottom.grid(row=3, column=0, sticky="ew", padx=12, pady=(0, 12))
+        tk.Button(bottom, text="Ver conferência diária", width=18, command=self.show_daily_conference).pack(side="left")
+        tk.Button(bottom, text="Fechar", width=12, command=window.destroy).pack(side="right")
 
     def import_attendance_path(self, path):
         punches = parse_attendance_txt(path)
@@ -1661,9 +1706,11 @@ class PontoDesktop(tk.Tk):
         if closed:
             closed_text = ", ".join(f"{month:02d}/{year}" for year, month in sorted(closed))
             messagebox.showwarning("Importar Ponto", f"Importacao bloqueada. Mes fechado para edicao:\n{closed_text}")
-            return {"punches": len(punches), "days": 0, "unknown": len(unknown), "closed": len(closed)}
+            return {"punches": len(punches), "days": 0, "unknown": len(unknown), "closed": len(closed), "unknown_items": sorted(unknown), "updated_items": [], "warnings": [f"Mes fechado: {closed_text}"]}
 
         updated_days = 0
+        updated_items = []
+        warnings = []
         for (employee_id, work_day), data in grouped.items():
             employee = data["employee"]
             stamps = sorted(set(data["punches"]))
@@ -1683,6 +1730,7 @@ class PontoDesktop(tk.Tk):
             note = f"Importado de {path.name}"
             if len(stamps) > 8:
                 note += f" | {len(stamps) - 8} batida(s) extra(s) ignorada(s)"
+                warnings.append(f"{employee['name']} - {work_day:%d/%m/%Y}: {len(stamps) - 8} batida(s) extra(s) ignorada(s)")
 
             existing = self.conn.execute(
                 "SELECT id FROM time_entries WHERE employee_id = ? AND work_date = ? ORDER BY id LIMIT 1",
@@ -1736,12 +1784,13 @@ class PontoDesktop(tk.Tk):
                     values,
                 )
             updated_days += 1
+            updated_items.append(f"{employee['name']} - {work_day:%d/%m/%Y}: {len([value for value in times if value])} batida(s), trabalhada {format_minutes(worked_minutes)}, credito {format_minutes(credit_minutes)}, debito {format_minutes(debit_minutes)}")
 
         self.conn.commit()
         self.write_audit("IMPORTAR_PONTO", "time_entries", path.name, f"Batidas={len(punches)}; dias={updated_days}; desconhecidos={len(unknown)}")
         if self.widget_exists("tree"):
             self.load_entries()
-        return {"punches": len(punches), "days": updated_days, "unknown": len(unknown), "closed": 0}
+        return {"punches": len(punches), "days": updated_days, "unknown": len(unknown), "closed": 0, "unknown_items": sorted(unknown), "updated_items": sorted(updated_items), "warnings": sorted(warnings)}
 
     def widget_exists(self, name):
         widget = getattr(self, name, None)
@@ -1874,10 +1923,27 @@ class PontoDesktop(tk.Tk):
 
     def show_employees(self):
         self.clear()
-        frame = tk.Frame(self, bg="#eeeeee")
+        frame = tk.Frame(self, bg="#f3f6f8")
         frame.pack(fill="both", expand=True, padx=12, pady=12)
-        tk.Label(frame, text="Funcionários", bg="#eeeeee", fg="#777777", font=("Arial", 24, "bold")).pack(anchor="w")
-        tree = ttk.Treeview(frame, columns=("id", "clock", "name", "department", "weekday", "sat", "tol"), show="headings")
+        frame.columnconfigure(0, weight=1)
+        frame.rowconfigure(2, weight=1)
+
+        header = tk.Frame(frame, bg="#f3f6f8")
+        header.grid(row=0, column=0, sticky="ew")
+        tk.Label(header, text="Funcionários", bg="#f3f6f8", fg="#1f2933", font=("Arial", 24, "bold")).pack(side="left")
+        tk.Button(header, text="Voltar ao menu", width=14, command=self.show_home).pack(side="right", padx=4)
+        tk.Button(header, text="Abrir ponto", width=12, command=lambda: open_selected_point()).pack(side="right", padx=4)
+
+        hint = tk.Label(frame, text="Selecione um funcionário para ver dados cadastrais, horários usados no cálculo e resumo do banco de horas.", bg="#e0f2fe", fg="#075985", anchor="w", padx=10, pady=7, font=("Arial", 10, "bold"))
+        hint.grid(row=1, column=0, sticky="ew", pady=(8, 10))
+
+        body = tk.PanedWindow(frame, orient="horizontal", bg="#f3f6f8", sashwidth=6)
+        body.grid(row=2, column=0, sticky="nsew")
+
+        list_frame = tk.Frame(body, bg="#f3f6f8")
+        list_frame.columnconfigure(0, weight=1)
+        list_frame.rowconfigure(0, weight=1)
+        tree = ttk.Treeview(list_frame, columns=("id", "clock", "name", "department", "weekday", "sat", "tol"), show="headings")
         for col, title, width in [
             ("id", "Código", 70),
             ("clock", "Crachá", 80),
@@ -1889,10 +1955,144 @@ class PontoDesktop(tk.Tk):
         ]:
             tree.heading(col, text=title)
             tree.column(col, width=width)
-        tree.pack(fill="both", expand=True, pady=10)
+        tree.grid(row=0, column=0, sticky="nsew")
+        scroll = ttk.Scrollbar(list_frame, orient="vertical", command=tree.yview)
+        scroll.grid(row=0, column=1, sticky="ns")
+        tree.configure(yscrollcommand=scroll.set)
+
+        details = tk.Frame(body, bg="#f3f6f8")
+        details.columnconfigure(0, weight=1)
+        details.rowconfigure(0, weight=1)
+        notebook = ttk.Notebook(details)
+        notebook.grid(row=0, column=0, sticky="nsew")
+        body.add(list_frame, width=650)
+        body.add(details, width=470)
+
+        vars_by_key = {
+            "id": tk.StringVar(),
+            "clock_id": tk.StringVar(),
+            "name": tk.StringVar(),
+            "department": tk.StringVar(),
+            "active": tk.StringVar(),
+            "cpf": tk.StringVar(),
+            "pis": tk.StringVar(),
+            "role": tk.StringVar(),
+            "weekday_hours": tk.StringVar(),
+            "saturday_hours": tk.StringVar(),
+            "sunday_hours": tk.StringVar(),
+            "tolerance_minutes": tk.StringVar(),
+            "summary": tk.StringVar(value="Selecione um funcionário."),
+        }
+
+        def add_readonly(parent, label, key, row):
+            tk.Label(parent, text=label, bg="white", fg="#334155", font=("Arial", 9, "bold")).grid(row=row, column=0, sticky="w", padx=10, pady=(8, 2))
+            tk.Entry(parent, textvariable=vars_by_key[key], state="readonly", readonlybackground="#f8fafc").grid(row=row, column=1, sticky="ew", padx=10, pady=(8, 2))
+
+        data_tab = tk.Frame(notebook, bg="white")
+        data_tab.columnconfigure(1, weight=1)
+        notebook.add(data_tab, text="Dados cadastrais")
+        for index, (label, key) in enumerate([
+            ("Código interno", "id"),
+            ("Código do relógio", "clock_id"),
+            ("Nome", "name"),
+            ("Departamento", "department"),
+            ("Ativo", "active"),
+            ("CPF", "cpf"),
+            ("PIS", "pis"),
+            ("Função", "role"),
+        ]):
+            add_readonly(data_tab, label, key, index)
+
+        hours_tab = tk.Frame(notebook, bg="white")
+        hours_tab.columnconfigure(1, weight=1)
+        notebook.add(hours_tab, text="Horários e cálculo")
+        for index, (label, key) in enumerate([
+            ("Segunda a sexta", "weekday_hours"),
+            ("Sábado", "saturday_hours"),
+            ("Domingo", "sunday_hours"),
+            ("Tolerância em minutos", "tolerance_minutes"),
+        ]):
+            add_readonly(hours_tab, label, key, index)
+        tk.Label(hours_tab, text="Esses horários são usados para calcular crédito e débito quando o ponto é importado.", bg="#fff7ed", fg="#9a3412", anchor="w", justify="left", padx=10, pady=8, font=("Arial", 9, "bold")).grid(row=5, column=0, columnspan=2, sticky="ew", padx=10, pady=14)
+
+        summary_tab = tk.Frame(notebook, bg="white")
+        summary_tab.columnconfigure(0, weight=1)
+        notebook.add(summary_tab, text="Resumo de ponto")
+        tk.Label(summary_tab, textvariable=vars_by_key["summary"], bg="white", fg="#1f2933", justify="left", anchor="nw", font=("Arial", 11), padx=12, pady=12).grid(row=0, column=0, sticky="nsew")
+
+        employees_by_id = {}
         for row in self.conn.execute("SELECT * FROM employees ORDER BY name"):
+            employees_by_id[str(row["id"])] = row
             tree.insert("", "end", values=(row["id"], row["clock_id"], row["name"], row["department"], row["weekday_hours"], row["saturday_hours"], row["tolerance_minutes"]))
-        tk.Button(frame, text="Voltar", command=self.show_home).pack(anchor="e")
+
+        def selected_employee_row():
+            selected = tree.selection()
+            if not selected:
+                return None
+            values = tree.item(selected[0], "values")
+            return employees_by_id.get(str(values[0])) if values else None
+
+        def refresh_details(_event=None):
+            employee = selected_employee_row()
+            if not employee:
+                return
+            for key in vars_by_key:
+                if key == "summary":
+                    continue
+                vars_by_key[key].set("" if employee[key] is None else str(employee[key]))
+            today_year = date.today().year
+            rows = self.conn.execute(
+                """
+                SELECT COUNT(*) AS days,
+                       SUM(COALESCE(credit_decimal, 0)) AS credit,
+                       SUM(COALESCE(debit_decimal, 0)) AS debit
+                FROM time_entries
+                WHERE employee_id = ? AND year = ?
+                """,
+                (employee["id"], today_year),
+            ).fetchone()
+            credit = round(float(rows["credit"] or 0) * 60) if rows else 0
+            debit = round(float(rows["debit"] or 0) * 60) if rows else 0
+            days = rows["days"] if rows else 0
+            vars_by_key["summary"].set(
+                f"Resumo de {today_year}\n\n"
+                f"Dias com ponto: {days}\n"
+                f"Horas extras: {format_minutes(credit)}\n"
+                f"Horas faltantes: {format_minutes(debit)}\n"
+                f"Saldo: {format_minutes(credit - debit)}\n\n"
+                "Para alterar batidas, use Abrir ponto. Para mudar dados cadastrais, a próxima etapa será liberar edição segura deste cadastro."
+            )
+
+        def open_selected_point():
+            employee = selected_employee_row()
+            if not employee:
+                messagebox.showwarning("Funcionários", "Selecione um funcionário.")
+                return
+            self.open_manual_point_for(employee["id"], date.today().month, date.today().year)
+
+        tree.bind("<<TreeviewSelect>>", refresh_details)
+        first = tree.get_children()
+        if first:
+            tree.selection_set(first[0])
+            refresh_details()
+
+    def open_manual_point_for(self, employee_id, month, year, day=None):
+        self.show_manual_point()
+        option = next((value for value in self.employee_options() if value.startswith(f"{employee_id} - ")), "")
+        if option:
+            self.employee_combo.set(option)
+        self.month_var.set(month_name(month))
+        self.year_var.set(str(year))
+        self.load_entries()
+        if day is not None:
+            for item in self.tree.get_children():
+                values = self.tree.item(item, "values")
+                if values and str(values[0]) == str(day):
+                    self.tree.selection_set(item)
+                    self.tree.focus(item)
+                    self.tree.see(item)
+                    self.select_entry()
+                    break
 
     def show_departments(self):
         departments = [row["department"] for row in self.conn.execute("SELECT DISTINCT department FROM employees WHERE department IS NOT NULL AND department <> '' ORDER BY department")]
@@ -2120,6 +2320,180 @@ class PontoDesktop(tk.Tk):
         for row in self.conn.execute("SELECT * FROM audit_log ORDER BY id DESC LIMIT 300").fetchall():
             tree.insert("", "end", values=tuple(row[col] or "" for col in columns))
         tk.Button(window, text="Fechar", width=12, command=window.destroy).pack(anchor="e", padx=10, pady=(0, 10))
+
+    def show_daily_conference(self, initial_filter="todos"):
+        window = tk.Toplevel(self)
+        window.title("Conferencia diaria")
+        window.geometry("1160x640")
+        window.configure(bg="#f3f6f8")
+        window.transient(self)
+        window.columnconfigure(0, weight=1)
+        window.rowconfigure(2, weight=1)
+
+        header = tk.Frame(window, bg="#0b7285", height=70)
+        header.grid(row=0, column=0, sticky="ew")
+        header.grid_propagate(False)
+        tk.Label(header, text="Conferência diária do ponto", bg="#0b7285", fg="white", font=("Arial", 18, "bold")).pack(anchor="w", padx=16, pady=(10, 0))
+        tk.Label(header, text="Veja quem está OK, faltando lançamento ou com batida incompleta antes de fechar o dia.", bg="#0b7285", fg="#d9f5f8", font=("Arial", 10, "bold")).pack(anchor="w", padx=16)
+
+        controls = tk.Frame(window, bg="#f3f6f8")
+        controls.grid(row=1, column=0, sticky="ew", padx=10, pady=10)
+        day_var = tk.StringVar(value=date.today().strftime("%d/%m/%Y"))
+        filter_var = tk.StringVar(value=initial_filter if initial_filter in ("todos", "presentes", "faltantes", "problemas") else "todos")
+        summary_var = tk.StringVar()
+
+        tk.Label(controls, text="Data", bg="#f3f6f8", font=("Arial", 10, "bold")).pack(side="left")
+        tk.Entry(controls, textvariable=day_var, width=12, bg="#fff8b8").pack(side="left", padx=6)
+        tk.Label(controls, text="Filtro", bg="#f3f6f8", font=("Arial", 10, "bold")).pack(side="left", padx=(12, 0))
+        ttk.Combobox(controls, textvariable=filter_var, values=["todos", "presentes", "faltantes", "problemas"], state="readonly", width=13).pack(side="left", padx=6)
+
+        columns = ("employee", "entrada1", "saida1", "entrada2", "saida2", "worked", "credit", "debit", "status", "note")
+        tree = ttk.Treeview(window, columns=columns, show="headings", height=22)
+        headings = ["Funcionário", "Entrada 1", "Saída 1", "Entrada 2", "Saída 2", "Trabalhada", "Crédito", "Débito", "Status", "Observação"]
+        widths = [220, 75, 75, 75, 75, 90, 75, 75, 150, 270]
+        for col, heading, width in zip(columns, headings, widths):
+            tree.heading(col, text=heading)
+            tree.column(col, width=width, minwidth=width, stretch=col in ("employee", "note"))
+        tree.grid(row=2, column=0, sticky="nsew", padx=10)
+        tree.tag_configure("ok", background="#ecfdf3")
+        tree.tag_configure("warning", background="#fff7ed")
+        tree.tag_configure("danger", background="#fee2e2")
+        tree.tag_configure("neutral", background="#f8fafc")
+
+        def selected_day():
+            try:
+                return datetime.strptime(day_var.get().strip(), "%d/%m/%Y").date()
+            except ValueError:
+                messagebox.showwarning("Conferência diária", "Informe a data no formato DD/MM/AAAA.")
+                return None
+
+        def refresh():
+            work_day = selected_day()
+            if not work_day:
+                return
+            for item in tree.get_children():
+                tree.delete(item)
+            rows = self.collect_daily_conference(work_day)
+            visible = []
+            for item in rows:
+                if filter_var.get() == "presentes" and item["status"] in ("Sem ponto", "Falta"):
+                    continue
+                if filter_var.get() == "faltantes" and item["status"] not in ("Sem ponto", "Falta"):
+                    continue
+                if filter_var.get() == "problemas" and item["severity"] == "ok":
+                    continue
+                visible.append(item)
+                tree.insert(
+                    "",
+                    "end",
+                    iid=str(item["employee_id"]),
+                    values=(item["employee"], item["entrada1"], item["saida1"], item["entrada2"], item["saida2"], item["worked"], item["credit"], item["debit"], item["status"], item["note"]),
+                    tags=(item["severity"],),
+                )
+            ok_count = sum(1 for item in rows if item["severity"] == "ok")
+            problem_count = sum(1 for item in rows if item["severity"] != "ok")
+            summary_var.set(f"{work_day:%d/%m/%Y}: {len(rows)} funcionário(s), {ok_count} OK, {problem_count} com atenção. Mostrando {len(visible)} linha(s).")
+
+        def open_edit():
+            selected = tree.selection()
+            if not selected:
+                messagebox.showwarning("Conferência diária", "Selecione um funcionário.")
+                return
+            work_day = selected_day()
+            if not work_day:
+                return
+            employee_id = int(selected[0])
+            window.destroy()
+            self.open_manual_point_for(employee_id, work_day.month, work_day.year, work_day.day)
+
+        tk.Button(controls, text="Atualizar", width=12, command=refresh).pack(side="left", padx=8)
+        tk.Button(controls, text="Abrir edição do dia", width=18, command=open_edit).pack(side="left", padx=4)
+        tk.Button(controls, text="Fechar", width=10, command=window.destroy).pack(side="right")
+        tk.Label(window, textvariable=summary_var, bg="#f3f6f8", fg="#334155", font=("Arial", 10, "bold"), anchor="w").grid(row=3, column=0, sticky="ew", padx=10, pady=8)
+        refresh()
+
+    def collect_daily_conference(self, work_day):
+        employees = self.conn.execute("SELECT * FROM employees ORDER BY name").fetchall()
+        entries = self.conn.execute(
+            """
+            SELECT *
+            FROM time_entries
+            WHERE work_date = ?
+            ORDER BY employee_id, id
+            """,
+            (work_day.isoformat(),),
+        ).fetchall()
+        entries_by_employee = {}
+        for entry in entries:
+            entries_by_employee.setdefault(entry["employee_id"], entry)
+
+        result = []
+        for employee in employees:
+            entry = entries_by_employee.get(employee["id"])
+            expected = self.expected_hours_for_date(employee, work_day)
+            expected_minutes = minutes(expected)
+            if not entry:
+                if expected_minutes <= 0:
+                    status = "Sem expediente"
+                    severity = "neutral"
+                else:
+                    status = "Sem ponto"
+                    severity = "danger"
+                result.append({
+                    "employee_id": employee["id"],
+                    "employee": employee["name"],
+                    "entrada1": "",
+                    "saida1": "",
+                    "entrada2": "",
+                    "saida2": "",
+                    "worked": "",
+                    "credit": "",
+                    "debit": "",
+                    "status": status,
+                    "severity": severity,
+                    "note": "",
+                })
+                continue
+
+            punches = [entry["entrada1"], entry["saida1"], entry["entrada2"], entry["saida2"], entry["entrada3"], entry["saida3"], entry["entrada4"], entry["saida4"]]
+            punch_count = len([value for value in punches if normalize_time(value)])
+            absence = (entry["absence"] or "").upper() == "S"
+            holiday = (entry["holiday"] or "").upper() == "S"
+            debit = minutes(entry["debit_hours"])
+            credit = minutes(entry["credit_hours"])
+            status = "OK"
+            severity = "ok"
+            if absence:
+                status = "Falta"
+                severity = "danger"
+            elif holiday:
+                status = "Feriado"
+                severity = "neutral"
+            elif punch_count % 2 == 1:
+                status = "Batida sem par"
+                severity = "danger"
+            elif debit >= 30:
+                status = "Débito alto"
+                severity = "warning"
+            elif credit >= 120:
+                status = "Crédito alto"
+                severity = "warning"
+
+            result.append({
+                "employee_id": employee["id"],
+                "employee": employee["name"],
+                "entrada1": hhmm(entry["entrada1"]),
+                "saida1": hhmm(entry["saida1"]),
+                "entrada2": hhmm(entry["entrada2"]),
+                "saida2": hhmm(entry["saida2"]),
+                "worked": hhmm(entry["worked_hours"]),
+                "credit": hhmm(entry["credit_hours"]),
+                "debit": hhmm(entry["debit_hours"]),
+                "status": status,
+                "severity": severity,
+                "note": entry["note"] or "",
+            })
+        return result
 
     def show_pending_points(self):
         window = tk.Toplevel(self)

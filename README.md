@@ -8,7 +8,7 @@ Aplicacao local para controle de ponto, banco de horas e relatorios mensais.
 - A instalacao cria o atalho `Ponto Funcionarios` na Area de Trabalho.
 - O atalho abre `PontoFuncionarios.exe` direto, sem janela de CMD.
 - O instalador fecha o programa, faz backup do banco, limpa arquivos antigos e preserva os dados.
-- Versao atual: `26.08.16`.
+- Versao atual: `26.08.17`.
 - Ela usa o banco local `data/ponto_funcionarios.db`.
 - Tambem pode usar banco da empresa em PostgreSQL pelo menu `AUXILIARES > Parametros`.
 - Ao abrir, o sistema entra no menu principal com os botoes de funcionario, entrada/saida, consulta, importar ponto e sair.
@@ -20,6 +20,9 @@ Aplicacao local para controle de ponto, banco de horas e relatorios mensais.
 - A area de Ocorrencias tem botoes rapidos para Dia normal, Marcar falta e Marcar feriado.
 - O menu principal mostra claramente se o sistema esta no banco local ou no banco da empresa PostgreSQL.
 - A tela `Pendencias do ponto` lista faltas, batidas sem par, debitos altos, creditos altos e observacoes do mes.
+- A tela `Conferencia diaria` mostra todos os funcionarios por data, separando OK, presentes, faltantes e problemas.
+- O cadastro de funcionarios agora separa dados cadastrais, horarios de calculo e resumo de ponto em abas.
+- A importacao do relogio mostra uma janela com dias atualizados, codigos nao encontrados e avisos da leitura.
 - A tela `Fechamento mensal` permite travar ou reabrir um mes ja conferido.
 - O sistema registra historico basico de importacoes, inclusoes, alteracoes, exclusoes e fechamento de mes.
 - O botao `Importar Ponto` abre o TXT exportado pelo relogio e grava as batidas no banco local.
