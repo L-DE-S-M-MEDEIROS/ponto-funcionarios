@@ -1,11 +1,13 @@
 ﻿{
-    "version":  "26.08.21",
+    "version":  "26.08.22",
     "author":  "L DE S M MEDEIROS",
     "type":  "installer",
-    "url":  "https://github.com/L-DE-S-M-MEDEIROS/ponto-funcionarios/releases/download/v26.08.21/Instalador.Ponto.Funcionarios.exe",
-    "sha256":  "89f1ba1f85e5bd47ce71effd5e797143858692d500f0755a27f649a34ca56b1a",
-    "title":  "Versao 26.08.21",
-    "description":  "Adiciona fechamento mensal do banco de horas gerado diretamente pelos pontos do app.",
-    "publishedAt":  "2026-08-11",
+    "url":  "https://github.com/L-DE-S-M-MEDEIROS/ponto-funcionarios/releases/download/v26.08.22/Instalador.Ponto.Funcionarios.exe",
+    "sha256":  "dca14195d42f15a3a8b8b4637435a73442842c38675a12581d68bb68d88323ac",
+    "zipUrl":  "https://github.com/L-DE-S-M-MEDEIROS/ponto-funcionarios/releases/download/v26.08.22/PontoFuncionarios-26.08.22.zip",
+    "zipSha256":  "5fce0ea6974a57af80b1953b97c1abd3adb04d30afc535662c2737402b832f60",
+    "title":  "Versao 26.08.22",
+    "description":  "Reduz falso positivo do antivirus removendo compressao UPX e adiciona pacote ZIP alternativo de instalacao.",
+    "publishedAt":  "2026-08-12",
     "critical":  false
 }
