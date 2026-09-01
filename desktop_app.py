@@ -19,7 +19,7 @@ else:
     APP_DIR = Path(__file__).resolve().parent
 DB_PATH = APP_DIR / "data" / "ponto_funcionarios.db"
 CONFIG_PATH = APP_DIR / "config.json"
-APP_VERSION = "26.08.22"
+APP_VERSION = "26.08.23"
 UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/L-DE-S-M-MEDEIROS/ponto-funcionarios/main/version.json"
 
 DEFAULT_CONFIG = {
@@ -2135,15 +2135,16 @@ class PontoDesktop(tk.Tk):
 
     def import_attendance_path(self, path):
         punches = parse_attendance_txt(path)
-        employees = {
-            str(row["clock_id"]).strip(): row
-            for row in self.conn.execute("SELECT * FROM employees WHERE clock_id IS NOT NULL AND clock_id <> ''")
-        }
+        employees = {}
+        for row in self.conn.execute("SELECT * FROM employees WHERE clock_id IS NOT NULL AND clock_id <> ''"):
+            raw_clock_id = str(row["clock_id"]).strip()
+            employees[raw_clock_id] = row
+            employees[normalize_clock_id(raw_clock_id)] = row
 
         grouped = {}
         unknown = set()
         for punch in punches:
-            employee = employees.get(punch["clock_id"])
+            employee = employees.get(punch["clock_id"]) or employees.get(normalize_clock_id(punch["clock_id"]))
             if not employee:
                 unknown.add(f"{punch['clock_id']} - {punch['name']}")
                 continue
@@ -3422,6 +3423,13 @@ def normalize_employee_name(value):
     text = "".join(char for char in text if not unicodedata.combining(char))
     text = text.upper().replace(" 26", "").replace("26", "")
     return " ".join(text.split())
+
+
+def normalize_clock_id(value):
+    text = str(value or "").strip()
+    if text.isdigit():
+        return str(int(text))
+    return text
 
 
 def excel_duration_minutes(value):

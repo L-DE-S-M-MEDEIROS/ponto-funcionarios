@@ -10,6 +10,7 @@ release/
 relatorios/
 tmp/
 *.tmp
+PontoFuncionarios-*.zip
 
 # Dados locais de funcionarios e ponto nao devem ir para GitHub publico.
 data/*.db

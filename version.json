@@ -1,13 +1,13 @@
-﻿{
-    "version":  "26.08.22",
-    "author":  "L DE S M MEDEIROS",
-    "type":  "installer",
-    "url":  "https://github.com/L-DE-S-M-MEDEIROS/ponto-funcionarios/releases/download/v26.08.22/Instalador.Ponto.Funcionarios.exe",
-    "sha256":  "dca14195d42f15a3a8b8b4637435a73442842c38675a12581d68bb68d88323ac",
-    "zipUrl":  "https://github.com/L-DE-S-M-MEDEIROS/ponto-funcionarios/releases/download/v26.08.22/PontoFuncionarios-26.08.22.zip",
-    "zipSha256":  "5fce0ea6974a57af80b1953b97c1abd3adb04d30afc535662c2737402b832f60",
-    "title":  "Versao 26.08.22",
-    "description":  "Reduz falso positivo do antivirus removendo compressao UPX e adiciona pacote ZIP alternativo de instalacao.",
-    "publishedAt":  "2026-08-12",
-    "critical":  false
+{
+  "version": "26.08.23",
+  "author": "L DE S M MEDEIROS",
+  "type": "installer",
+  "url": "https://github.com/L-DE-S-M-MEDEIROS/ponto-funcionarios/releases/download/v26.08.23/Instalador.Ponto.Funcionarios.exe",
+  "sha256": "23629dd0f1af51b5c5222bdee144d9163f3c4e9135f7f49429ac5dc1678440df",
+  "zipUrl": "https://github.com/L-DE-S-M-MEDEIROS/ponto-funcionarios/releases/download/v26.08.23/PontoFuncionarios-26.08.23.zip",
+  "zipSha256": "8fc66a67c969693d5feafbdc7dda1839a35a01708c92d691223bce96daf6d22e",
+  "title": "Versao 26.08.23",
+  "description": "Cadastra Cristian no banco da empresa e melhora a importacao para aceitar IDs com zero a esquerda, como 05 e 5.",
+  "publishedAt": "2026-09-01",
+  "critical": false
 }

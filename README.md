@@ -5,11 +5,11 @@ Aplicacao local para controle de ponto, banco de horas e relatorios mensais.
 ## Programa desktop
 
 - Para instalar em outro computador, envie `Instalador.Ponto.Funcionarios.exe`.
-- Se o Windows Defender bloquear o instalador por reputacao, use o pacote `PontoFuncionarios-26.08.22.zip`, extraia em uma pasta local e execute `Instalar_Ponto_Desktop.bat`.
+- Se o Windows Defender bloquear o instalador por reputacao, use o pacote ZIP da versao publicada, extraia em uma pasta local e execute `Instalar_Ponto_Desktop.bat`.
 - A instalacao cria o atalho `Ponto Funcionarios` na Area de Trabalho.
 - O atalho abre `PontoFuncionarios.exe` direto, sem janela de CMD.
 - O instalador fecha o programa, faz backup do banco, limpa arquivos antigos e preserva os dados.
-- Versao atual: `26.08.22`.
+- Versao atual: `26.08.23`.
 - Ela usa o banco local `data/ponto_funcionarios.db`.
 - Tambem pode usar banco da empresa em PostgreSQL pelo menu `AUXILIARES > Parametros`.
 - Ao abrir, o sistema entra no menu principal com os botoes de funcionario, entrada/saida, consulta, importar ponto e sair.
@@ -30,6 +30,7 @@ Aplicacao local para controle de ponto, banco de horas e relatorios mensais.
 - A tela `Conferencia diaria` mostra todos os funcionarios por data, separando OK, presentes, faltantes e problemas.
 - O cadastro de funcionarios agora separa dados cadastrais, horarios de calculo e resumo de ponto em abas.
 - A importacao do relogio mostra uma janela com dias atualizados, codigos nao encontrados e avisos da leitura.
+- A importacao do relogio reconhece IDs com zeros a esquerda, entao `05` e `5` apontam para o mesmo funcionario.
 - A tela `Fechamento mensal` permite travar ou reabrir um mes ja conferido.
 - O sistema registra historico basico de importacoes, inclusoes, alteracoes, exclusoes e fechamento de mes.
 - O botao `Importar Ponto` abre o TXT exportado pelo relogio e grava as batidas no banco local.
